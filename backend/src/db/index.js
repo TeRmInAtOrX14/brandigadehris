@@ -4,7 +4,7 @@ const { DatabaseSync } = require('node:sqlite');
 
 require('dotenv').config();
 
-const DB_PATH = process.env.DB_PATH || './data/hris.db';
+const DB_PATH = process.env.DB_PATH || (process.env.VERCEL ? '/tmp/hris.db' : './data/hris.db');
 const dir = path.dirname(DB_PATH);
 if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 
