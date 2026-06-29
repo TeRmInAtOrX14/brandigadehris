@@ -68,14 +68,50 @@ async function boot() {
     console.error('Failed to load Google SSO config:', err);
   }
 
-  // Auto-login with hardcoded credentials for testing
-  if (!state.token) {
-    // Simulate successful authentication
-    const fakeToken = 'test-token';
+  // ---------------------------------------------------
+  // Role selection handlers (for testing)
+  function handleRoleSelection(role) {
+    // Simple hardcoded credentials per role for testing purposes
+    const roleMap = {
+      admin: {
+        email: 'admin@brandigade.com',
+        employee: { id: 1, full_name: 'Admin User' },
+      },
+      teamlead: {
+        email: 'lead@brandigade.com',
+        employee: { id: 2, full_name: 'Team Lead User' },
+      },
+      sdr: {
+        email: 'sdr@brandigade.com',
+        employee: { id: 3, full_name: 'SDR User' },
+      },
+    };
+
+    const cfg = roleMap[role];
+    if (!cfg) return;
+    // Simulate successful auth
+    const fakeToken = 'test-token-' + role;
     setToken(fakeToken);
-    state.user = { email: 'test@example.com', role: 'admin', mustChangePassword: false };
-    state.employee = { id: 1, full_name: 'Test User' };
+    state.user = { email: cfg.email, role: role, mustChangePassword: false };
+    state.employee = cfg.employee;
+    // Notify UI to proceed
     enterApp();
+  }
+
+  // Attach listeners after DOM is ready
+  document.addEventListener('DOMContentLoaded', () => {
+    const adminBtn = document.getElementById('role-admin');
+    const leadBtn = document.getElementById('role-teamlead');
+    const sdrBtn = document.getElementById('role-sdr');
+    if (adminBtn) adminBtn.addEventListener('click', () => handleRoleSelection('admin'));
+    if (leadBtn) leadBtn.addEventListener('click', () => handleRoleSelection('teamlead'));
+    if (sdrBtn) sdrBtn.addEventListener('click', () => handleRoleSelection('sdr'));
+  });
+  // ---------------------------------------------------
+  // Adjust boot logic: remove hardcoded auto-login (already removed earlier)
+  // If no token, simply show the role selection UI (login-screen remains visible)
+  if (!state.token) {
+    // No automatic login; wait for user to pick a role via the UI.
     return;
   }
   // Existing auth flow when token present
@@ -256,59 +292,62 @@ async function renderDashboard() {
       const active = employees.filter(e => e.employment_status === 'active');
 
       setMain(`
-        <div class="page-header"><h2>Dashboard</h2></div>
-        <div class="stat-grid">
-          <div class="stat-card">
-            <div class="stat-label">Active Employees</div>
-            <div class="stat-value">${active.length}</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-label">Total Staff</div>
-            <div class="stat-value">${employees.length}</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-label">Pending Leaves</div>
-            <div class="stat-value">${pendingLeave.length}</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-label">Biometric Device</div>
-            <div class="stat-value" style="font-size: 14px; margin-top: 10px;">
-              ${state.googleClientId ? '<span class="pill pill-green">Online</span>' : '<span class="pill pill-gray">Inactive</span>'}
-            </div>
-          </div>
-        </div>
+  <div class="front-header" style="display:flex;align-items:center;gap:12px;margin-bottom:20px;">
+    <img src="logo.png" alt="Brandigade Logo" style="height:60px;">
+    <h1 style="margin:0;">HRIS SYSTEM</h1>
+  </div>
+  <div class="page-header"><h2>Dashboard</h2></div>
+  <div class="stat-grid">
+    <div class="stat-card">
+      <div class="stat-label">Active Employees</div>
+      <div class="stat-value">${active.length}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Total Staff</div>
+      <div class="stat-value">${employees.length}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Pending Leaves</div>
+      <div class="stat-value">${pendingLeave.length}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Biometric Device</div>
+      <div class="stat-value" style="font-size: 14px; margin-top: 10px;">
+        ${state.googleClientId ? '<span class="pill pill-green">Online</span>' : '<span class="pill pill-gray">Inactive</span>'}
+      </div>
+    </div>
+  </div>
 
-        <div class="card">
-          <h3 style="margin-bottom:18px;">Biometric Quick Sync (ZKTeco UFace 800)</h3>
-          <p class="muted" style="margin-bottom:16px;">Trigger an immediate TCP download of all punch-logs from the office attendance device.</p>
-          <button class="btn btn-primary" onclick="triggerBiometricSync(this)">⚡ Sync Device Attendance</button>
-          <span id="biometric-quick-status" style="margin-left: 15px; font-weight: 600;"></span>
-        </div>
+  <div class="card">
+    <h3 style="margin-bottom:18px;">Biometric Quick Sync (ZKTeco UFace 800)</h3>
+    <p class="muted" style="margin-bottom:16px;">Trigger an immediate TCP download of all punch-logs from the office attendance device.</p>
+    <button class="btn btn-primary" onclick="triggerBiometricSync(this)">⚡ Sync Device Attendance</button>
+    <span id="biometric-quick-status" style="margin-left: 15px; font-weight: 600;"></span>
+  </div>
 
-        <div class="card">
-          <h3 style="margin-bottom:14px;">Pending Leave Requests</h3>
-          ${pendingLeave.length === 0 ? '<div class="muted">No pending requests.</div>' : `
-            <div class="table-wrap">
-              <table>
-                <thead>
-                  <tr><th>Employee</th><th>Type</th><th>Dates</th><th>Days</th><th></th></tr>
-                </thead>
-                <tbody>
-                  ${pendingLeave.map(r => `
-                    <tr>
-                      <td><strong>${escapeHtml(r.full_name)}</strong></td>
-                      <td>${escapeHtml(r.leave_type_name)}</td>
-                      <td>${r.start_date} → ${r.end_date}</td>
-                      <td>${r.days}</td>
-                      <td><a href="#" onclick="navigateTo('leave'); return false;" style="color:var(--blue-soft); font-weight:600;">Review →</a></td>
-                    </tr>
-                  `).join('')}
-                </tbody>
-              </table>
-            </div>
-          `}
-        </div>
-      `);
+  <div class="card">
+    <h3 style="margin-bottom:14px;">Pending Leave Requests</h3>
+    ${pendingLeave.length === 0 ? '<div class="muted">No pending requests.</div>' : `
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Employee</th><th>Type</th><th>Dates</th><th>Days</th><th></th></tr>
+          </thead>
+          <tbody>
+            ${pendingLeave.map(r => `
+              <tr>
+                <td><strong>${escapeHtml(r.full_name)}</strong></td>
+                <td>${escapeHtml(r.leave_type_name)}</td>
+                <td>${r.start_date} → ${r.end_date}</td>
+                <td>${r.days}</td>
+                <td><a href="#" onclick="navigateTo('leave'); return false;" style="color:var(--blue-soft); font-weight:600;">Review →</a></td>
+              </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+    `}
+  </div>
+`);
     } else {
       // Employee Dashboard
       const balances = await api('GET', '/leave/balances/' + state.employee.id);
@@ -319,25 +358,29 @@ async function renderDashboard() {
       const isCheckedOut = !!todayStatus.check_out;
 
       setMain(`
-        <div class="page-header"><h2>Welcome, ${escapeHtml(state.employee.full_name || '')}</h2></div>
-        
-        <!-- Live Check-In widget -->
-        <div class="checkin-widget">
-          <div class="checkin-status">
-            <div class="cs-label">Today's Attendance Status</div>
-            <div class="cs-time">
-              ${isCheckedIn ? (isCheckedOut ? `Checked Out: ${todayStatus.check_out}` : `Checked In: ${todayStatus.check_in}`) : 'Not Clocked In'}
-            </div>
-            <div class="cs-detail">
-              ${todayStatus.late ? '<span class="pill pill-red">Late Check-in</span>' : (isCheckedIn ? '<span class="pill pill-green">On Time</span>' : 'Biometric log pending')}
-              ${todayStatus.status === 'half_day' ? ' | <span class="pill pill-amber">Half Day (under 4 hrs worked)</span>' : ''}
-            </div>
-          </div>
-          <div class="checkin-actions">
-            <button class="btn btn-primary" onclick="clockIn()" ${isCheckedIn ? 'disabled' : ''}>Clock In</button>
-            <button class="btn btn-ghost" onclick="clockOut()" ${!isCheckedIn || isCheckedOut ? 'disabled' : ''}>Clock Out</button>
-          </div>
-        </div>
+  <div class="front-header" style="display:flex;align-items:center;gap:12px;margin-bottom:20px;">
+    <img src="logo.png" alt="Brandigade Logo" style="height:60px;">
+    <h1 style="margin:0;">HRIS SYSTEM</h1>
+  </div>
+  <div class="page-header"><h2>Welcome, ${escapeHtml(state.employee.full_name || '')}</h2></div>
+
+  <!-- Live Check-In widget -->
+  <div class="checkin-widget">
+    <div class="checkin-status">
+      <div class="cs-label">Today's Attendance Status</div>
+      <div class="cs-time">
+        ${isCheckedIn ? (isCheckedOut ? `Checked Out: ${todayStatus.check_out}` : `Checked In: ${todayStatus.check_in}`) : 'Not Clocked In'}
+      </div>
+      <div class="cs-detail">
+        ${todayStatus.late ? '<span class="pill pill-red">Late Check-in</span>' : (isCheckedIn ? '<span class="pill pill-green">On Time</span>' : 'Biometric log pending')}
+        ${todayStatus.status === 'half_day' ? ' | <span class="pill pill-amber">Half Day (under 4 hrs worked)</span>' : ''}
+      </div>
+    </div>
+    <div class="checkin-actions">
+      <button class="btn btn-primary" onclick="clockIn()" ${isCheckedIn ? 'disabled' : ''}>Clock In</button>
+      <button class="btn btn-ghost" onclick="clockOut()" ${!isCheckedIn || isCheckedOut ? 'disabled' : ''}>Clock Out</button>
+    </div>
+  </div>
 
         <div class="stat-grid">
           ${balances.map(b => `
