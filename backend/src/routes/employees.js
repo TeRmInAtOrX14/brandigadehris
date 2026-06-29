@@ -104,17 +104,19 @@ router.post('/', requireAuth, requireAdmin, (req, res) => {
   const userResult = insertUser.run(normalizedEmail, hash);
 
   const code = nextEmployeeCode();
+  const gmail = `${code.toLowerCase()}@brandigade.com`;
   const insertEmp = db.prepare(`
     INSERT INTO employees (
       user_id, employee_code, full_name, designation, department, manager_id,
       date_of_joining, employment_status, base_salary, phone, cnic_or_id, bank_account, address, emergency_contact,
-      shift_start, shift_end
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, ?, ?)
+      gmail, shift_start, shift_end
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const empResult = insertEmp.run(
     userResult.lastInsertRowid, code, fullName, designation || null, department || null,
     managerId || null, dateOfJoining || null, Number(baseSalary) || 0,
     phone || null, cnicOrId || null, bankAccount || null, address || null, emergencyContact || null,
+    gmail,
     shiftStart || '09:30', shiftEnd || '18:30'
   );
 

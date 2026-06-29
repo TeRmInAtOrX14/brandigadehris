@@ -17,7 +17,11 @@ function formatMoney(amount, currency) {
  * company: { name, address }
  */
 function generatePayslipPdf(stream, payslip, company) {
-  const doc = new PDFDocument({ size: 'A4', margin: 50 });
+  const logoPath = path.join(__dirname, '..', 'public', 'logo.png');
+  if (fs.existsSync(logoPath)) {
+    doc.image(logoPath, 50, 45, { width: 50 });
+    doc.moveDown();
+  }
   doc.pipe(stream);
 
   const blue = '#2E75B6';

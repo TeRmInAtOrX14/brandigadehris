@@ -88,7 +88,19 @@ function calculatePayslips(runId, periodMonth, periodYear, overrides) {
     const showups = Number(override.showups) || 0;
     const meetingsScheduled = Number(override.meetingsScheduled) || 0;
     const noShows = Number(override.noShows) || 0;
-    const commission = Number(override.commission) || 0;
+    // Compute commission based on number of showups and admin-defined rate per project/role
+    let commission = 0;
+    try {
+      const proj = db.prepare(`SELECT ep.project_id, ep.role FROM employee_projects ep WHERE ep.employee_id = ?`).get(emp.id);
+      if (proj) {
+        const rateRow = db.prepare(`SELECT amount FROM commissions WHERE project_id = ? AND role = ?`).get(proj.project_id, proj.role);
+        if (rateRow) {
+          commission = Number(rateRow.amount) * showups;
+        }
+      }
+    } catch (e) {
+      console.error('Commission calculation error', e);
+    }
     const spiffs = Number(override.spiffs) || 0;
 
     const netPay = Math.round((emp.base_salary - unpaidLeaveDeduction + bonus - otherDeductions + commission + spiffs) * 100) / 100;

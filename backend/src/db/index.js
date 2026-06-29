@@ -173,6 +173,51 @@ try { db.exec("ALTER TABLE attendance ADD COLUMN check_out TEXT;"); } catch (e) 
 try { db.exec("ALTER TABLE attendance ADD COLUMN late INTEGER DEFAULT 0;"); } catch (e) {}
 try { db.exec("ALTER TABLE attendance ADD COLUMN late_notified INTEGER DEFAULT 0;"); } catch (e) {}
 
+  // Migration: add gmail column to employees
+  try { db.exec("ALTER TABLE employees ADD COLUMN gmail TEXT;"); } catch (e) {}
+
+  // Create projects (teams) table
+  try { db.exec(`
+    CREATE TABLE IF NOT EXISTS projects (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT UNIQUE NOT NULL,
+      description TEXT
+    );
+  `); } catch (e) {}
+
+  // Employee to project assignment with role (e.g., 'member', 'team_lead')
+  try { db.exec(`
+    CREATE TABLE IF NOT EXISTS employee_projects (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      employee_id INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+      project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      role TEXT NOT NULL CHECK(role IN ('member', 'team_lead', 'admin', 'sdr', 'ceo', 'coo')),
+      UNIQUE(employee_id, project_id)
+    );
+  `); } catch (e) {}
+
+  // Commission structures per project and role (admin defines)
+  try { db.exec(`
+    CREATE TABLE IF NOT EXISTS commissions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      role TEXT NOT NULL CHECK(role IN ('team_lead', 'sdr', 'admin', 'ceo', 'coo')),
+      amount REAL NOT NULL,
+      UNIQUE(project_id, role)
+    );
+  `); } catch (e) {}
+
+  // Spiffs log (admin or team lead can give)
+  try { db.exec(`
+    CREATE TABLE IF NOT EXISTS spiffs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      employee_id INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+      given_by INTEGER NOT NULL REFERENCES users(id),
+      amount REAL NOT NULL,
+      reason TEXT,
+      date TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+  `); } catch (e) {}
 try { db.exec("ALTER TABLE employees ADD COLUMN shift_start TEXT DEFAULT '09:30';"); } catch (e) {}
 try { db.exec("ALTER TABLE employees ADD COLUMN shift_end TEXT DEFAULT '18:30';"); } catch (e) {}
 
