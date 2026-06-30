@@ -179,31 +179,6 @@ async function syncZKTeco() {
       });
 
       synced++;
-
-      // Trigger Email Notification for Late Arrival if this is the first time registering the late entry (fire-and-forget to prevent blocking the sync loop)
-      if (lateMins > 0 && (!existingAttendance || existingAttendance.late === 0)) {
-        try {
-          if (emp.user && emp.user.email) {
-            const timeStr = checkInTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-            sendMail({
-              to: emp.user.email,
-              subject: `Late Check-In Recorded — ${dateMidnight.toISOString().split('T')[0]}`,
-              text: `Dear ${emp.fullName},\n\nYour check-in time of ${timeStr} on ${dateMidnight.toISOString().split('T')[0]} is recorded as late (${lateMins} minutes past shift start).\n\nBest regards,\nBrandigade HR Team`,
-            }).catch(err => console.warn(`[Mailer Warning] Failed to send email to ${emp.user.email}: ${err.message}`));
-          }
-          const adminEmail = process.env.ADMIN_EMAIL;
-          if (adminEmail) {
-            const timeStr = checkInTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-            sendMail({
-              to: adminEmail,
-              subject: `Late Arrival: ${emp.fullName} — ${dateMidnight.toISOString().split('T')[0]}`,
-              text: `${emp.fullName} checked in at ${timeStr} (${lateMins} minutes late).`,
-            }).catch(err => console.warn(`[Mailer Warning] Failed to send email to admin: ${err.message}`));
-          }
-        } catch (e) {
-          errors.push(`Late email failed for ${emp.fullName}: ${e.message}`);
-        }
-      }
     }
 
     console.log(`[ZKTeco] Sync complete. Synced: ${synced}, Skipped: ${skipped}`);
