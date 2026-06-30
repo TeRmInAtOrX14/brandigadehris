@@ -10,14 +10,7 @@ const app = express();
 // Security & Parsing Middlewares
 app.use(helmet());
 app.use(cors({
-  origin: (origin, callback) => {
-    const allowed = ['http://localhost:5173', 'http://localhost:5175'];
-    if (!origin || allowed.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
+  origin: true,
   credentials: true,
 }));
 app.use(express.json());
@@ -56,16 +49,18 @@ const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => {
   console.log(`HRIS Backend running on port ${PORT}`);
   
-  // Start Biometric Auto-Sync Scheduler (Every 5 minutes)
+  // Start Biometric Auto-Sync Scheduler (Every 2 hours, only when on office network)
   const { syncZKTeco } = require('./utils/zkteco');
-  const AUTO_SYNC_INTERVAL = 5 * 60 * 1000; // 5 minutes in ms
+  const AUTO_SYNC_INTERVAL = 2 * 60 * 60 * 1000; // 2 hours in ms
 
-  console.log(`[Scheduler] Biometric logs auto-sync active (Interval: 5 minutes)`);
+  console.log(`[Scheduler] Biometric auto-sync active (Interval: 2 hours, skips if not on office network)`);
   setInterval(async () => {
-    console.log('[Scheduler] Initiating automatic biometric logs synchronization...');
+    console.log('[Scheduler] Initiating automatic biometric sync...');
     try {
       const result = await syncZKTeco();
-      console.log(`[Scheduler] Auto-sync finished. Synced: ${result.synced}, Skipped: ${result.skipped}, Errors: ${result.errors.length}`);
+      if (result.synced > 0 || result.errors.length > 0) {
+        console.log(`[Scheduler] Auto-sync finished. Synced: ${result.synced}, Skipped: ${result.skipped}, Errors: ${result.errors.length}`);
+      }
     } catch (err) {
       console.error('[Scheduler] Auto-sync encountered an error:', err.message);
     }

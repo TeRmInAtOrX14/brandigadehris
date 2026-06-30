@@ -177,7 +177,7 @@ exports.runPayroll = async (req, res, next) => {
               }
             }
           }
-          // Team Lead calculation (Team Average Slabs override)
+          // Team Lead calculation
           else if (role === 'team_lead') {
             // Find all active SDRs in this campaign
             const teamSdrs = await prisma.campaignMember.findMany({
@@ -199,20 +199,48 @@ exports.runPayroll = async (req, res, next) => {
             const teamSize = teamSdrs.length;
 
             if (teamSize > 0) {
-              const avgShowups = teamShowups / teamSize;
-              const matchedSlab = activeStructure.slabs.find(slab => 
-                avgShowups >= slab.minShowups && 
-                (slab.maxShowups === null || avgShowups <= slab.maxShowups)
-              );
-              if (matchedSlab) {
-                if (matchedSlab.type === 'per_showup') {
-                  commission = teamShowups * matchedSlab.rate;
-                } else if (matchedSlab.type === 'fixed_monthly') {
-                  commission = matchedSlab.rate;
-                } else if (matchedSlab.type === 'percentage') {
-                  commission = matchedSlab.rate * teamShowups;
-                } else if (matchedSlab.type === 'hybrid') {
-                  commission = matchedSlab.rate + (teamShowups * 2000);
+              // Get Campaign Details to check name
+              const campaignObj = await prisma.campaign.findUnique({ where: { id: campaignId } });
+              const campaignName = campaignObj ? campaignObj.name.toUpperCase() : '';
+              
+              // Target campaigns list
+              const targetCampaignNames = ['LVGL', 'CLEO HR', 'PATIENT WING', 'LOGICS', 'BRANDIGADE OUTREACH'];
+              const isTargetCampaign = targetCampaignNames.some(name => campaignName.includes(name));
+
+              if (isTargetCampaign) {
+                // Slab 1: 4 * team_members + 1 -> PKR 10,000
+                // Slab 2: 6 * team_members + 1 -> PKR 14,000
+                // Slab 3: 8 * team_members + 1 -> PKR 18,000
+                // Slab 4: 10 * team_members + 1 -> PKR 22,000
+                if (teamShowups >= (10 * teamSize) + 1) {
+                  commission = 22000;
+                } else if (teamShowups >= (8 * teamSize) + 1) {
+                  commission = 18000;
+                } else if (teamShowups >= (6 * teamSize) + 1) {
+                  commission = 14000;
+                } else if (teamShowups >= (4 * teamSize) + 1) {
+                  commission = 10000;
+                } else {
+                  commission = 0;
+                }
+                console.log(`[Commission TL] Campaign: ${campaignObj.name} | Team Size: ${teamSize} | Total Showups: ${teamShowups} | Commission Paid: PKR ${commission}`);
+              } else {
+                // Fallback to database-driven slab overrides for other campaigns
+                const avgShowups = teamShowups / teamSize;
+                const matchedSlab = activeStructure.slabs.find(slab => 
+                  avgShowups >= slab.minShowups && 
+                  (slab.maxShowups === null || avgShowups <= slab.maxShowups)
+                );
+                if (matchedSlab) {
+                  if (matchedSlab.type === 'per_showup') {
+                    commission = teamShowups * matchedSlab.rate;
+                  } else if (matchedSlab.type === 'fixed_monthly') {
+                    commission = matchedSlab.rate;
+                  } else if (matchedSlab.type === 'percentage') {
+                    commission = matchedSlab.rate * teamShowups;
+                  } else if (matchedSlab.type === 'hybrid') {
+                    commission = matchedSlab.rate + (teamShowups * 2000);
+                  }
                 }
               }
             }

@@ -145,14 +145,16 @@ export default function Attendance() {
             type="date"
             value={startDate}
             onChange={(e) => setStartDate(e.target.value)}
-            className="px-3.5 py-2 rounded-xl border border-brand-border bg-brand-bg/40 text-xs text-white focus:outline-none"
+            onClick={(e) => e.target.showPicker && e.target.showPicker()}
+            className="px-3.5 py-2 rounded-xl border border-brand-border bg-brand-bg/40 text-xs text-white focus:outline-none cursor-pointer"
           />
           <span className="text-brand-text-mute text-xs">to</span>
           <input
             type="date"
             value={endDate}
             onChange={(e) => setEndDate(e.target.value)}
-            className="px-3.5 py-2 rounded-xl border border-brand-border bg-brand-bg/40 text-xs text-white focus:outline-none"
+            onClick={(e) => e.target.showPicker && e.target.showPicker()}
+            className="px-3.5 py-2 rounded-xl border border-brand-border bg-brand-bg/40 text-xs text-white focus:outline-none cursor-pointer"
           />
         </div>
 

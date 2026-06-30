@@ -80,14 +80,27 @@ export default function Employees() {
   };
 
   const handleTerminate = async (id) => {
-    if (confirm('Are you sure you want to terminate this employee? This will deactivate their user login.')) {
+    if (confirm('Are you sure you want to terminate this employee? This will deactivate their user login and send them a termination email.')) {
       try {
-        await api.delete(`/employees/${id}`);
-        toast.success('Employee terminated successfully');
+        await api.post(`/employees/${id}/terminate`);
+        toast.success('Employee terminated successfully. Email sent.');
         setDetailEmployee(null);
         fetchEmployees();
       } catch (e) {
         toast.error('Termination action failed');
+      }
+    }
+  };
+
+  const handleDeleteEmployee = async (id) => {
+    if (confirm('WARNING: Are you absolutely sure you want to delete this employee? This will permanently delete their profile, user credentials, attendance history, payslips, leaves, loans, and EVERYTHING else. This action CANNOT be undone.')) {
+      try {
+        await api.delete(`/employees/${id}`);
+        toast.success('Employee and all records deleted permanently');
+        setDetailEmployee(null);
+        fetchEmployees();
+      } catch (e) {
+        toast.error('Failed to delete employee record');
       }
     }
   };
@@ -302,15 +315,24 @@ export default function Employees() {
                 </div>
               </div>
 
-              {/* Action Buttons */}
-              {isAdmin && detailEmployee.status === 'active' && (
-                <div className="mt-8 border-t border-brand-border pt-4">
+               {/* Action Buttons */}
+              {isAdmin && (
+                <div className="mt-8 border-t border-brand-border pt-4 space-y-3">
+                  {detailEmployee.status === 'active' && (
+                    <button
+                      onClick={() => handleTerminate(detailEmployee.id)}
+                      className="w-full flex items-center justify-center gap-2 py-3 rounded-full bg-brand-amber/10 hover:bg-brand-amber hover:text-brand-bg border border-brand-amber/30 text-xs font-bold uppercase tracking-wider font-display transition-all duration-300 cursor-pointer"
+                    >
+                      <Clock className="w-4 h-4" />
+                      Terminate Employment & Disable Login
+                    </button>
+                  )}
                   <button
-                    onClick={() => handleTerminate(detailEmployee.id)}
-                    className="w-full flex items-center justify-center gap-2 py-3 rounded-full bg-brand-amber/10 hover:bg-brand-amber hover:text-brand-bg border border-brand-amber/30 text-xs font-bold uppercase tracking-wider font-display transition-all duration-300 cursor-pointer"
+                    onClick={() => handleDeleteEmployee(detailEmployee.id)}
+                    className="w-full flex items-center justify-center gap-2 py-3 rounded-full bg-brand-red/10 hover:bg-brand-red hover:text-brand-bg border border-brand-red/30 text-xs font-bold uppercase tracking-wider font-display transition-all duration-300 cursor-pointer"
                   >
                     <Trash2 className="w-4 h-4" />
-                    Terminate Employment & Disable Login
+                    Delete Record Permanently (Hard Delete)
                   </button>
                 </div>
               )}

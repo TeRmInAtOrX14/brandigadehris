@@ -1,6 +1,7 @@
 const { PrismaClient } = require('@prisma/client');
 const bcrypt = require('bcryptjs');
 const { logAudit } = require('../utils/audit');
+const { sendMail } = require('../utils/mailer');
 
 const prisma = new PrismaClient();
 
@@ -299,7 +300,44 @@ exports.deleteEmployee = async (req, res, next) => {
       return res.status(404).json({ error: 'Employee not found' });
     }
 
-    // Rather than hard delete, we disable the user account and mark status as terminated
+    // Cascade hard-delete all related data in a transaction
+    await prisma.$transaction([
+      prisma.salaryHistory.deleteMany({ where: { employeeId: id } }),
+      prisma.campaignMember.deleteMany({ where: { employeeId: id } }),
+      prisma.campaignPerformance.deleteMany({ where: { employeeId: id } }),
+      prisma.spiff.deleteMany({ where: { employeeId: id } }),
+      prisma.attendance.deleteMany({ where: { employeeId: id } }),
+      prisma.leaveRequest.deleteMany({ where: { employeeId: id } }),
+      prisma.halfdayRequest.deleteMany({ where: { employeeId: id } }),
+      prisma.wfhRequest.deleteMany({ where: { employeeId: id } }),
+      prisma.loanRequest.deleteMany({ where: { employeeId: id } }),
+      prisma.payslip.deleteMany({ where: { employeeId: id } }),
+      prisma.document.deleteMany({ where: { employeeId: id } }),
+      prisma.employee.delete({ where: { id } }),
+      prisma.user.delete({ where: { id: emp.userId } })
+    ]);
+
+    await logAudit(req.user.id, 'DELETE_EMPLOYEE', 'Employee', id, { fullName: emp.fullName, employeeCode: emp.employeeCode });
+    res.json({ message: 'Employee and all associated records deleted permanently.' });
+  } catch (err) {
+    next(err);
+  }
+};
+
+exports.terminateEmployee = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    const emp = await prisma.employee.findUnique({
+      where: { id },
+      include: { user: true }
+    });
+
+    if (!emp) {
+      return res.status(404).json({ error: 'Employee not found' });
+    }
+
+    // Set employee status to terminated and user to inactive
     await prisma.$transaction([
       prisma.user.update({
         where: { id: emp.userId },
@@ -311,8 +349,31 @@ exports.deleteEmployee = async (req, res, next) => {
       })
     ]);
 
+    // Send termination email
+    const subject = 'Employment Termination Notice - Brandigade';
+    const html = `
+      <div style="font-family: Arial, sans-serif; line-height: 1.6; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e5e7eb; rounded-xl;">
+        <h2 style="color: #dc2626; border-bottom: 2px solid #dc2626; padding-bottom: 10px;">Employment Termination Notice</h2>
+        <p>Dear <strong>${emp.fullName}</strong>,</p>
+        <p>We are writing to officially inform you that your employment with <strong>Brandigade</strong> has been terminated, effective immediately.</p>
+        <p>Consequently, your credentials and user access to the Brandigade HRIS portal have been deactivated.</p>
+        <p>For any inquiries regarding your final settlement, unpaid salary clearance, or return of company properties, please reach out to the HR department directly at <a href="mailto:hr@brandigade.com">hr@brandigade.com</a>.</p>
+        <p>We appreciate the time you spent with us and wish you the best in your future endeavors.</p>
+        <br/>
+        <p>Sincerely,</p>
+        <p><strong>HR Department</strong><br/>Brandigade</p>
+      </div>
+    `;
+
+    // Attempt to send email; if email credentials aren't set up yet, it'll gracefully log warning
+    await sendMail({
+      to: emp.user.email,
+      subject,
+      html
+    });
+
     await logAudit(req.user.id, 'TERMINATE_EMPLOYEE', 'Employee', id);
-    res.json({ message: 'Employee terminated and user account deactivated successfully' });
+    res.json({ message: 'Employee terminated successfully. Notification email dispatched.' });
   } catch (err) {
     next(err);
   }

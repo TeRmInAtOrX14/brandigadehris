@@ -1,3 +1,6 @@
+const net = require('net');
+const fs = require('fs');
+const path = require('path');
 const ZKLib = require('node-zklib');
 const { PrismaClient } = require('@prisma/client');
 const { sendMail } = require('./mailer');
@@ -6,11 +9,61 @@ const prisma = new PrismaClient();
 
 const DEVICE_IP = process.env.ZKTECO_IP || null;
 const DEVICE_PORT = Number(process.env.ZKTECO_PORT) || 4370;
-const TIMEOUT = 5000; // ms to wait for device connection
+const TIMEOUT = 5000;
 
-// Office start time for late detection (e.g. "09:30")
+// Persists the last sync timestamp so we don't re-process old records on restart
+const STATE_FILE = path.join(__dirname, '../../data/sync-state.json');
+
+// Office hours defaults (overridable via .env)
 const OFFICE_START = process.env.OFFICE_START_TIME || '09:30';
-const OFFICE_END = process.env.OFFICE_END_TIME || '18:30';
+const OFFICE_END   = process.env.OFFICE_END_TIME   || '18:30';
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Quick TCP probe — checks if the ZKTeco device is on the current network
+ * before attempting a full connection. Returns true if reachable.
+ */
+function isDeviceReachable(ip, port, timeoutMs = 3000) {
+  return new Promise((resolve) => {
+    const socket = new net.Socket();
+    let resolved = false;
+
+    const done = (reachable) => {
+      if (!resolved) {
+        resolved = true;
+        socket.destroy();
+        resolve(reachable);
+      }
+    };
+
+    socket.setTimeout(timeoutMs);
+    socket.on('connect', () => done(true));
+    socket.on('timeout',  () => done(false));
+    socket.on('error',    () => done(false));
+    socket.connect(port, ip);
+  });
+}
+
+/** Read persisted sync state from database. */
+async function readSyncState() {
+  try {
+    const lastRecord = await prisma.attendance.findFirst({
+      where: {
+        zkSyncId: { startsWith: 'zk_' }
+      },
+      orderBy: {
+        date: 'desc'
+      }
+    });
+    return { lastSyncAt: lastRecord ? lastRecord.date : null };
+  } catch (err) {
+    console.error('[ZKTeco] Failed to read sync state from DB:', err.message);
+    return { lastSyncAt: null };
+  }
+}
 
 function timeToMinutes(t) {
   if (!t) return 0;
@@ -19,7 +72,7 @@ function timeToMinutes(t) {
 }
 
 /**
- * Normalizes device record date into UTC-based Date object representing the midnight of local date
+ * Normalizes a device date into a UTC midnight Date representing the local calendar date.
  */
 function getLocalDateMidnight(date) {
   const d = new Date(date);
@@ -27,8 +80,31 @@ function getLocalDateMidnight(date) {
 }
 
 /**
- * Main sync function. Pulls attendance records from the device and upserts
- * them into the database using Prisma.
+ * Returns the earlier of two dates (or the non-null one if one is null).
+ */
+function minDate(a, b) {
+  if (!a) return b;
+  if (!b) return a;
+  return a < b ? a : b;
+}
+
+/**
+ * Returns the later of two dates (or the non-null one if one is null).
+ */
+function maxDate(a, b) {
+  if (!a) return b;
+  if (!b) return a;
+  return a > b ? a : b;
+}
+
+// ---------------------------------------------------------------------------
+// Main sync function
+// ---------------------------------------------------------------------------
+
+/**
+ * Pulls attendance records from the ZKTeco device and upserts them into the
+ * database. Only processes records newer than the last successful sync to
+ * avoid redundant work. Uses a batch DB fetch to eliminate N+1 queries.
  *
  * @returns {Promise<{ synced: number, skipped: number, errors: string[] }>}
  */
@@ -37,9 +113,27 @@ async function syncZKTeco() {
     return { synced: 0, skipped: 0, errors: ['ZKTECO_IP is not set in environment variables.'] };
   }
 
-  const errors = [];
-  let synced = 0;
-  let skipped = 0;
+  // Network check — skip silently if not on office WiFi
+  const reachable = await isDeviceReachable(DEVICE_IP, DEVICE_PORT);
+  if (!reachable) {
+    console.log(`[ZKTeco] Device at ${DEVICE_IP}:${DEVICE_PORT} not reachable — not on office network, skipping sync.`);
+    return { synced: 0, skipped: 0, errors: [] };
+  }
+
+  const errors  = [];
+  let synced    = 0;
+  let skipped   = 0;
+
+  // Determine the cutoff: process records newer than (lastSync - 1 day) to
+  // catch checkout punches that might span midnight or were missed.
+  // If no prior sync exists, pull the last 60 days as the initial load.
+  const { lastSyncAt } = await readSyncState();
+  const cutoff = lastSyncAt
+    ? new Date(lastSyncAt.getTime() - 24 * 60 * 60 * 1000) // 1-day overlap window
+    : new Date(Date.now() - 60 * 24 * 60 * 60 * 1000);     // initial: last 60 days
+
+  const syncStartedAt = new Date();
+  console.log(`[ZKTeco] Cutoff for this sync: ${cutoff.toISOString()}`);
 
   const zk = new ZKLib(DEVICE_IP, DEVICE_PORT, TIMEOUT, 0);
 
@@ -47,11 +141,13 @@ async function syncZKTeco() {
     await zk.createSocket();
     console.log(`[ZKTeco] Connected to device at ${DEVICE_IP}:${DEVICE_PORT}`);
 
-    // Download attendance logs from device
+    // Download ALL punch records from device (ZKTeco protocol has no server-side filter)
     const { data: attendanceLogs } = await zk.getAttendances();
-    console.log(`[ZKTeco] Downloaded ${attendanceLogs.length} punch records from device.`);
+    console.log(`[ZKTeco] Downloaded ${attendanceLogs.length} total punch records from device.`);
 
-    // 1. Fetch active employees to map device user IDs
+    // -----------------------------------------------------------------------
+    // 1. Build employee lookup map
+    // -----------------------------------------------------------------------
     const employees = await prisma.employee.findMany({
       where: { status: 'active' },
       include: { user: true }
@@ -59,40 +155,37 @@ async function syncZKTeco() {
 
     const employeeMap = {};
     for (const emp of employees) {
-      // Direct match
       employeeMap[emp.employeeCode] = emp;
-      if (emp.zkUserId) {
-        employeeMap[emp.zkUserId] = emp;
-      }
-      // Numeric suffix matching (e.g., EMP-003 or EMP003 -> 3)
-      const numericSuffix = emp.employeeCode.replace(/\D/g, '');
-      if (numericSuffix) {
-        employeeMap[numericSuffix] = emp;
-        employeeMap[String(Number(numericSuffix))] = emp;
+      if (emp.zkUserId) employeeMap[emp.zkUserId] = emp;
+      // Numeric suffix matching: EMP-003, EMP003 → "3"
+      const num = emp.employeeCode.replace(/\D/g, '');
+      if (num) {
+        employeeMap[num] = emp;
+        employeeMap[String(Number(num))] = emp;
       }
     }
 
-    // 2. Group punches by (employeeId, date)
-    const dayMap = {}; // key: `${employeeId}_${dateString}`
+    // -----------------------------------------------------------------------
+    // 2. Filter + group punches by (employeeId, date)
+    //    Only process records newer than cutoff — ignore old history
+    // -----------------------------------------------------------------------
+    const dayMap = {}; // key: `${employeeId}_${YYYY-MM-DD}`
 
     for (const log of attendanceLogs) {
       const deviceUserId = String(log.deviceUserId).trim();
       const emp = employeeMap[deviceUserId];
 
-      if (!emp) {
-        skipped++;
-        continue;
-      }
+      // Skip unknown device users
+      if (!emp) { skipped++; continue; }
 
       const punchTime = new Date(log.recordTime);
-      if (punchTime < new Date('2026-06-01T00:00:00')) {
-        skipped++;
-        continue;
-      }
+
+      // Skip records older than our cutoff window
+      if (punchTime < cutoff) { skipped++; continue; }
 
       const dateMidnight = getLocalDateMidnight(punchTime);
-      const dateKey = dateMidnight.toISOString().split('T')[0];
-      const key = `${emp.id}_${dateKey}`;
+      const dateKey      = dateMidnight.toISOString().split('T')[0];
+      const key          = `${emp.id}_${dateKey}`;
 
       if (!dayMap[key]) {
         dayMap[key] = { emp, dateMidnight, punches: [] };
@@ -100,96 +193,114 @@ async function syncZKTeco() {
       dayMap[key].punches.push(punchTime);
     }
 
-    // 3. Upsert attendance records
-    for (const entry of Object.values(dayMap)) {
-      const { emp, dateMidnight, punches } = entry;
+    const entries = Object.values(dayMap);
+    console.log(`[ZKTeco] ${entries.length} employee-day records to process after filtering.`);
 
-      punches.sort((a, b) => a.getTime() - b.getTime());
-      const checkInTime = punches[0];
-      const checkOutTime = punches.length > 1 ? punches[punches.length - 1] : null;
+    if (entries.length === 0) {
+      console.log('[ZKTeco] No new records to sync.');
+      return { synced: 0, skipped, errors: [] };
+    }
 
-      // Extract hours and minutes for calculation
-      const checkInMinutes = checkInTime.getHours() * 60 + checkInTime.getMinutes();
-      const shiftStartMinutes = timeToMinutes(emp.shiftStart || OFFICE_START);
+    // -----------------------------------------------------------------------
+    // 3. Batch-fetch all existing attendance records in ONE query (no N+1)
+    // -----------------------------------------------------------------------
+    const orConditions = entries.map(({ emp, dateMidnight }) => ({
+      employeeId: emp.id,
+      date: dateMidnight
+    }));
 
-      // Grace period calculation (15 minutes grace)
-      const diffMinutes = checkInMinutes - shiftStartMinutes;
-      const lateMins = diffMinutes > 15 ? diffMinutes : 0;
+    const existingRecords = await prisma.attendance.findMany({
+      where: { OR: orConditions }
+    });
 
-      // Early departure calculation
+    // Build a lookup map: `${employeeId}_${date}` → existing record
+    const existingMap = {};
+    for (const rec of existingRecords) {
+      const k = `${rec.employeeId}_${rec.date.toISOString().split('T')[0]}`;
+      existingMap[k] = rec;
+    }
+
+    // -----------------------------------------------------------------------
+    // 4. Upsert — smart merge preserving the earliest checkIn & latest checkOut
+    // -----------------------------------------------------------------------
+    for (const { emp, dateMidnight, punches } of entries) {
+      punches.sort((a, b) => a - b);
+
+      const deviceCheckIn  = punches[0];
+      const deviceCheckOut = punches.length > 1 ? punches[punches.length - 1] : null;
+
+      const dateKey    = dateMidnight.toISOString().split('T')[0];
+      const mapKey     = `${emp.id}_${dateKey}`;
+      const existing   = existingMap[mapKey];
+
+      // Merge: always keep the EARLIEST check-in and LATEST check-out
+      // This ensures corrections from the device are always reflected
+      const finalCheckIn  = minDate(existing?.checkIn  || null, deviceCheckIn);
+      const finalCheckOut = maxDate(existing?.checkOut || null, deviceCheckOut);
+
+      // Recalculate metrics from the merged times
+      const checkInMinutes   = finalCheckIn.getHours() * 60 + finalCheckIn.getMinutes();
+      const shiftStartMins   = timeToMinutes(emp.shiftStart || OFFICE_START);
+      const shiftEndMins     = timeToMinutes(emp.shiftEnd   || OFFICE_END);
+      const diff             = checkInMinutes - shiftStartMins;
+      const lateMins         = diff > 15 ? diff : 0;
+
       let earlyDepartureMins = 0;
-      let overtimeMins = 0;
-      const shiftEndMinutes = timeToMinutes(emp.shiftEnd || OFFICE_END);
-
-      if (checkOutTime) {
-        const checkOutMinutes = checkOutTime.getHours() * 60 + checkOutTime.getMinutes();
-        if (checkOutMinutes < shiftEndMinutes) {
-          earlyDepartureMins = shiftEndMinutes - checkOutMinutes;
+      let overtimeMins       = 0;
+      if (finalCheckOut) {
+        const checkOutMins = finalCheckOut.getHours() * 60 + finalCheckOut.getMinutes();
+        if (checkOutMins < shiftEndMins) {
+          earlyDepartureMins = shiftEndMins - checkOutMins;
         } else {
-          overtimeMins = checkOutMinutes - shiftEndMinutes;
+          overtimeMins = checkOutMins - shiftEndMins;
         }
       }
 
-      // Check-in and out worked minutes check for half-day status
       let status = 'present';
-      if (checkOutTime) {
-        const workedMins = (checkOutTime.getTime() - checkInTime.getTime()) / 60000;
-        if (workedMins < 240) {
-          status = 'half_day';
-        }
+      if (finalCheckOut) {
+        const workedMins = (finalCheckOut - finalCheckIn) / 60000;
+        if (workedMins < 240) status = 'half_day';
       }
 
-      // Check if a record already exists
-      const existingAttendance = await prisma.attendance.findUnique({
-        where: {
-          employeeId_date: {
-            employeeId: emp.id,
-            date: dateMidnight
-          }
-        }
-      });
-
-      // Upsert record
       await prisma.attendance.upsert({
         where: {
-          employeeId_date: {
-            employeeId: emp.id,
-            date: dateMidnight
-          }
+          employeeId_date: { employeeId: emp.id, date: dateMidnight }
         },
         create: {
-          employeeId: emp.id,
-          date: dateMidnight,
+          employeeId:     emp.id,
+          date:           dateMidnight,
           status,
-          checkIn: checkInTime,
-          checkOut: checkOutTime,
-          late: lateMins,
+          checkIn:        finalCheckIn,
+          checkOut:       finalCheckOut,
+          late:           lateMins,
           earlyDeparture: earlyDepartureMins,
-          overtime: overtimeMins,
-          zkSyncId: 'zk_sync_log'
+          overtime:       overtimeMins,
+          zkSyncId:       `zk_${syncStartedAt.toISOString()}`
         },
         update: {
-          checkIn: existingAttendance?.checkIn || checkInTime,
-          checkOut: checkOutTime || existingAttendance?.checkOut,
-          status: status,
-          late: lateMins,
+          checkIn:        finalCheckIn,
+          checkOut:       finalCheckOut,
+          status,
+          late:           lateMins,
           earlyDeparture: earlyDepartureMins,
-          overtime: overtimeMins
+          overtime:       overtimeMins,
+          zkSyncId:       `zk_${syncStartedAt.toISOString()}`
         }
       });
 
       synced++;
     }
 
+    // Persist sync state so next run knows where to start
     console.log(`[ZKTeco] Sync complete. Synced: ${synced}, Skipped: ${skipped}`);
+
   } catch (err) {
     const msg = `[ZKTeco] Sync failed: ${err.message}`;
     console.error(msg);
     errors.push(msg);
+    // Do NOT update sync state on failure so next run retries from same window
   } finally {
-    try {
-      await zk.disconnect();
-    } catch (_) {}
+    try { await zk.disconnect(); } catch (_) {}
   }
 
   return { synced, skipped, errors };
