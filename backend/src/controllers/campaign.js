@@ -62,22 +62,61 @@ exports.getCampaigns = async (req, res, next) => {
 
 exports.createCampaign = async (req, res, next) => {
   try {
-    const { name, description, startDate, endDate, monthlyShowupTarget, notes } = req.body;
+    const { name, description, startDate, endDate, notes, teamLeadId, sdrIds = [] } = req.body;
 
     if (!name) {
       return res.status(400).json({ error: 'Campaign name is required' });
     }
 
-    const campaign = await prisma.campaign.create({
-      data: {
-        name,
-        description,
-        status: 'active',
-        startDate: startDate ? new Date(startDate) : null,
-        endDate: endDate ? new Date(endDate) : null,
-        monthlyShowupTarget: parseInt(monthlyShowupTarget) || 0,
-        notes
+    const campaign = await prisma.$transaction(async (tx) => {
+      // 1. Create campaign
+      const camp = await tx.campaign.create({
+        data: {
+          name,
+          description,
+          status: 'active',
+          startDate: startDate ? new Date(startDate) : null,
+          endDate: endDate ? new Date(endDate) : null,
+          monthlyShowupTarget: 0,
+          notes
+        }
+      });
+
+      // 2. Assign Team Lead if provided
+      if (teamLeadId) {
+        await tx.campaignMember.updateMany({
+          where: { employeeId: teamLeadId, status: 'active' },
+          data: { status: 'inactive' }
+        });
+        await tx.campaignMember.create({
+          data: {
+            campaignId: camp.id,
+            employeeId: teamLeadId,
+            role: 'team_lead',
+            status: 'active'
+          }
+        });
       }
+
+      // 3. Assign SDRs if provided
+      for (const sdrId of sdrIds) {
+        if (sdrId) {
+          await tx.campaignMember.updateMany({
+            where: { employeeId: sdrId, status: 'active' },
+            data: { status: 'inactive' }
+          });
+          await tx.campaignMember.create({
+            data: {
+              campaignId: camp.id,
+              employeeId: sdrId,
+              role: 'sdr',
+              status: 'active'
+            }
+          });
+        }
+      }
+
+      return camp;
     });
 
     await logAudit(req.user.id, 'CREATE_CAMPAIGN', 'Campaign', campaign.id, { name });
@@ -626,12 +665,6 @@ exports.getCampaignDashboard = async (req, res, next) => {
     // Sort leaderboard by showups descending
     leaderboard.sort((a, b) => b.showups - a.showups);
 
-    // Remaining show-ups and Target Achievement %
-    const remainingShowups = Math.max(0, campaign.monthlyShowupTarget - totalShowups);
-    const targetAchievement = campaign.monthlyShowupTarget > 0 
-      ? parseFloat(((totalShowups / campaign.monthlyShowupTarget) * 100).toFixed(1))
-      : 0;
-
     // Conversion rate: Showups / Meetings Booked
     const conversionRate = totalMeetingsBooked > 0
       ? parseFloat(((totalShowups / totalMeetingsBooked) * 100).toFixed(1))
@@ -660,15 +693,12 @@ exports.getCampaignDashboard = async (req, res, next) => {
         id: campaign.id,
         name: campaign.name,
         status: campaign.status,
-        monthlyShowupTarget: campaign.monthlyShowupTarget,
         teamLead: teamLeadName,
         totalSdrs: sdrs.length
       },
       stats: {
         meetingsBooked: totalMeetingsBooked,
         showups: totalShowups,
-        remainingShowups,
-        targetAchievement,
         noShows: totalNoShows,
         cancelledMeetings: totalCancelled,
         conversionRate,

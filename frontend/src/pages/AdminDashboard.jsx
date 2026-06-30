@@ -97,7 +97,6 @@ export default function AdminDashboard({ stats }) {
                 <div className="flex justify-between text-[10px] text-brand-text-mute font-mono">
                   <span>Lead: <strong className="text-white font-sans">{lead?.employee?.fullName || 'Unassigned'}</strong></span>
                   <span>SDR Size: <strong className="text-white font-sans">{sdrs.length}</strong></span>
-                  <span>Target: <strong className="text-white font-sans">{camp.monthlyShowupTarget}</strong></span>
                 </div>
               </div>
             );

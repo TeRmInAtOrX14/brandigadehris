@@ -30,6 +30,7 @@ export default function Campaigns() {
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('overview'); // overview, dashboard, commission_builder, simulator
+  const [selectedSdrIds, setSelectedSdrIds] = useState([]);
 
   // Selected Campaign details for Dashboard/Commission tabs
   const [selectedCampaignId, setSelectedCampaignId] = useState('');
@@ -130,10 +131,14 @@ export default function Campaigns() {
 
   const handleCreateCampaign = async (data) => {
     try {
-      await api.post('/campaigns', data);
+      await api.post('/campaigns', {
+        ...data,
+        sdrIds: selectedSdrIds
+      });
       toast.success('Campaign created successfully!');
       setCreateCampaignOpen(false);
       reset();
+      setSelectedSdrIds([]);
       fetchInitialData();
     } catch (err) {
       toast.error(err.response?.data?.error || 'Failed to create campaign');
@@ -513,10 +518,6 @@ export default function Campaigns() {
 
                         <div className="space-y-1.5 text-xs border-t border-brand-border/40 pt-3">
                           <div className="flex justify-between text-brand-text-mute">
-                            <span>Show-Up Target:</span>
-                            <span className="font-extrabold text-white font-mono">{camp.monthlyShowupTarget} / month</span>
-                          </div>
-                          <div className="flex justify-between text-brand-text-mute">
                             <span>Active structure:</span>
                             <span className="font-extrabold text-brand-cyan">{activeStructure ? activeStructure.name : 'None configured'}</span>
                           </div>
@@ -601,23 +602,7 @@ export default function Campaigns() {
               ) : dashboardData ? (
                 <div className="space-y-6">
                   {/* KPIs Summary */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                    <div className="p-5 rounded-2xl glass-panel border border-brand-border/40 relative overflow-hidden">
-                      <div className="absolute right-2.5 top-2.5 p-2 rounded-lg bg-brand-blue/10">
-                        <TrendingUp className="w-4 h-4 text-brand-blue" />
-                      </div>
-                      <p className="text-[10px] text-brand-text-soft font-bold uppercase tracking-widest font-display">Target Show-ups</p>
-                      <h3 className="text-2xl font-extrabold text-white mt-2 font-mono">
-                        {dashboardData.stats.showups} <span className="text-xs text-brand-text-soft">/ {dashboardData.campaign.monthlyShowupTarget}</span>
-                      </h3>
-                      <div className="w-full bg-brand-bg rounded-full h-1.5 mt-3 overflow-hidden border border-brand-border">
-                        <div
-                          className="bg-gradient-to-r from-brand-blue to-brand-cyan h-full rounded-full"
-                          style={{ width: `${Math.min(100, dashboardData.stats.targetAchievement)}%` }}
-                        />
-                      </div>
-                      <p className="text-[9px] text-brand-text-mute mt-2 font-bold">{dashboardData.stats.targetAchievement}% achievement rate</p>
-                    </div>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
 
                     <div className="p-5 rounded-2xl glass-panel border border-brand-border/40 relative overflow-hidden">
                       <div className="absolute right-2.5 top-2.5 p-2 rounded-lg bg-brand-cyan/10">
@@ -952,7 +937,7 @@ export default function Campaigns() {
           <div className="bg-brand-bg-elevated border border-brand-border rounded-2xl p-6 w-full max-w-md shadow-glow relative z-50 text-left">
             <div className="flex justify-between items-center border-b border-brand-border pb-3 mb-4">
               <h3 className="text-sm font-extrabold text-white uppercase font-display">Create Campaign</h3>
-              <button onClick={() => setCreateCampaignOpen(false)} className="p-1 rounded text-brand-text-soft hover:text-white cursor-pointer"><X className="w-4 h-4" /></button>
+              <button onClick={() => { setCreateCampaignOpen(false); setSelectedSdrIds([]); }} className="p-1 rounded text-brand-text-soft hover:text-white cursor-pointer"><X className="w-4 h-4" /></button>
             </div>
             <form onSubmit={handleSubmit(handleCreateCampaign)} className="space-y-4">
               <div>
@@ -963,10 +948,45 @@ export default function Campaigns() {
                 <label className="block text-[10px] font-bold uppercase text-brand-text-soft mb-1.5">Description</label>
                 <textarea rows={3} {...register('description')} placeholder="Detail the campaign parameters..." className="w-full px-3.5 py-2.5 rounded-xl bg-brand-bg border border-brand-border text-xs text-white focus:outline-none focus:border-brand-blue" />
               </div>
+              
               <div>
-                <label className="block text-[10px] font-bold uppercase text-brand-text-soft mb-1.5">Monthly Show-Up Target</label>
-                <input type="number" {...register('monthlyShowupTarget')} placeholder="e.g. 100" className="w-full px-3.5 py-2.5 rounded-xl bg-brand-bg border border-brand-border text-xs text-white focus:outline-none focus:border-brand-blue font-mono" />
+                <label className="block text-[10px] font-bold uppercase text-brand-text-soft mb-1.5">Assign Team Lead (Optional)</label>
+                <select
+                  {...register('teamLeadId')}
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-brand-bg border border-brand-border text-xs text-white focus:outline-none cursor-pointer"
+                >
+                  <option value="">No Lead Assigned</option>
+                  {employees.map(e => (
+                    <option key={e.id} value={e.id}>{e.fullName} ({e.employeeCode})</option>
+                  ))}
+                </select>
               </div>
+
+              <div>
+                <label className="block text-[10px] font-bold uppercase text-brand-text-soft mb-1.5">Assign SDRs (Check to Add)</label>
+                <div className="max-h-40 overflow-y-auto p-3 rounded-xl border border-brand-border bg-brand-bg/40 space-y-2">
+                  {employees.map(e => (
+                    <label key={e.id} className="flex items-center gap-2 text-xs text-white cursor-pointer hover:text-brand-cyan">
+                      <input
+                        type="checkbox"
+                        value={e.id}
+                        onChange={(evt) => {
+                          const checked = evt.target.checked;
+                          if (checked) {
+                            setSelectedSdrIds(prev => [...prev, e.id]);
+                          } else {
+                            setSelectedSdrIds(prev => prev.filter(id => id !== e.id));
+                          }
+                        }}
+                        checked={selectedSdrIds.includes(e.id)}
+                        className="rounded bg-brand-bg border-brand-border text-brand-cyan focus:ring-0 cursor-pointer"
+                      />
+                      <span>{e.fullName} ({e.employeeCode})</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
               <div>
                 <label className="block text-[10px] font-bold uppercase text-brand-text-soft mb-1.5">Internal Notes</label>
                 <input type="text" {...register('notes')} placeholder="Campaign rules overview..." className="w-full px-3.5 py-2.5 rounded-xl bg-brand-bg border border-brand-border text-xs text-white focus:outline-none focus:border-brand-blue" />
@@ -994,10 +1014,6 @@ export default function Campaigns() {
               <div>
                 <label className="block text-[10px] font-bold uppercase text-brand-text-soft mb-1.5">Description</label>
                 <textarea rows={3} {...register('description')} className="w-full px-3.5 py-2.5 rounded-xl bg-brand-bg border border-brand-border text-xs text-white focus:outline-none focus:border-brand-blue" />
-              </div>
-              <div>
-                <label className="block text-[10px] font-bold uppercase text-brand-text-soft mb-1.5">Monthly Show-Up Target</label>
-                <input type="number" {...register('monthlyShowupTarget')} className="w-full px-3.5 py-2.5 rounded-xl bg-brand-bg border border-brand-border text-xs text-white focus:outline-none focus:border-brand-blue font-mono" />
               </div>
               <div>
                 <label className="block text-[10px] font-bold uppercase text-brand-text-soft mb-1.5">Internal Notes</label>
