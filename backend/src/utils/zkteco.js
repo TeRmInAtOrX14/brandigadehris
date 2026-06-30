@@ -242,8 +242,8 @@ async function syncZKTeco() {
       const checkInMinutes   = finalCheckIn.getHours() * 60 + finalCheckIn.getMinutes();
       const shiftStartMins   = timeToMinutes(emp.shiftStart || OFFICE_START);
       const shiftEndMins     = timeToMinutes(emp.shiftEnd   || OFFICE_END);
-      const diff             = checkInMinutes - shiftStartMins;
-      const lateMins         = diff > 15 ? diff : 0;
+      const grace            = emp.graceMinutes !== undefined ? emp.graceMinutes : 15;
+      const lateMins         = diff > grace ? diff : 0;
 
       let earlyDepartureMins = 0;
       let overtimeMins       = 0;

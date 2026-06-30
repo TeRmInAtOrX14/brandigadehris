@@ -15,7 +15,8 @@ import {
   Eye,
   Trash2,
   Loader2,
-  Clock
+  Clock,
+  Pencil
 } from 'lucide-react';
 import api from '../utils/api';
 import toast from 'react-hot-toast';
@@ -36,7 +37,75 @@ export default function Employees() {
   const currentUser = JSON.parse(localStorage.getItem('user')) || { role: 'Employee' };
   const isAdmin = ['Admin', 'CEO', 'COO'].includes(currentUser.role);
 
-  const { register, handleSubmit, reset, formState: { errors } } = useForm();
+  const addForm = useForm({
+    defaultValues: {
+      shiftStart: '09:30',
+      shiftEnd: '18:30',
+      graceMinutes: 15,
+      role: 'Employee'
+    }
+  });
+  const { register, handleSubmit, reset, formState: { errors } } = addForm;
+
+  const editForm = useForm();
+  const {
+    register: registerEdit,
+    handleSubmit: handleSubmitEdit,
+    reset: resetEdit,
+    formState: { errors: errorsEdit }
+  } = editForm;
+
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [editingEmployee, setEditingEmployee] = useState(null);
+
+  const handleEditClick = (emp) => {
+    setEditingEmployee(emp);
+    
+    let formattedDate = '';
+    if (emp.dateOfJoining) {
+      formattedDate = new Date(emp.dateOfJoining).toISOString().substring(0, 10);
+    }
+
+    resetEdit({
+      email: emp.user?.email || '',
+      role: emp.user?.role || 'Employee',
+      isActive: emp.user?.isActive !== false,
+      employeeCode: emp.employeeCode || '',
+      fullName: emp.fullName || '',
+      designation: emp.designation || '',
+      teamId: emp.team?.id || '',
+      baseSalary: emp.baseSalary || 0,
+      dateOfJoining: formattedDate,
+      zkUserId: emp.zkUserId || '',
+      shiftStart: emp.shiftStart || '09:30',
+      shiftEnd: emp.shiftEnd || '18:30',
+      graceMinutes: emp.graceMinutes !== undefined ? emp.graceMinutes : 15,
+      cnic: emp.cnic || '',
+      phone: emp.phone || '',
+      emergencyContact: emp.emergencyContact || '',
+      address: emp.address || '',
+      status: emp.status || 'active',
+      salaryChangeReason: '',
+      salaryChangeEffectiveDate: new Date().toISOString().substring(0, 10)
+    });
+    setEditModalOpen(true);
+  };
+
+  const handleEditEmployee = async (data) => {
+    try {
+      await api.put(`/employees/${editingEmployee.id}`, data);
+      toast.success('Employee updated successfully!');
+      setEditModalOpen(false);
+      setEditingEmployee(null);
+      fetchEmployees();
+      if (detailEmployee && detailEmployee.id === editingEmployee.id) {
+        const res = await api.get(`/employees/${editingEmployee.id}`);
+        setDetailEmployee(res.data);
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to update employee');
+    }
+  };
 
   const fetchEmployees = async () => {
     try {
@@ -197,13 +266,24 @@ export default function Employees() {
                       </span>
                     </td>
                     <td className="p-4 text-right">
-                      <button
-                        onClick={() => setDetailEmployee(emp)}
-                        className="p-1.5 rounded-xl border border-brand-border text-brand-text-soft hover:text-white hover:border-brand-blue-soft transition-colors cursor-pointer"
-                        title="View Profile"
-                      >
-                        <Eye className="w-3.5 h-3.5" />
-                      </button>
+                      <div className="flex justify-end gap-2">
+                        <button
+                          onClick={() => setDetailEmployee(emp)}
+                          className="p-1.5 rounded-xl border border-brand-border text-brand-text-soft hover:text-white hover:border-brand-blue-soft transition-colors cursor-pointer"
+                          title="View Profile"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                        </button>
+                        {isAdmin && (
+                          <button
+                            onClick={() => handleEditClick(emp)}
+                            className="p-1.5 rounded-xl border border-brand-border text-brand-text-soft hover:text-white hover:border-brand-blue-soft transition-colors cursor-pointer"
+                            title="Edit Profile"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -492,6 +572,17 @@ export default function Employees() {
                     />
                   </div>
 
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-brand-text-soft mb-2">Shift Grace Minutes *</label>
+                    <input
+                      type="number"
+                      defaultValue="15"
+                      {...register('graceMinutes', { required: true })}
+                      placeholder="e.g. 15"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-brand-border bg-brand-bg text-xs text-white focus:outline-none focus:border-brand-blue"
+                    />
+                  </div>
+
                   <div className="col-span-2">
                     <label className="block text-[10px] font-bold uppercase tracking-wider text-brand-text-soft mb-2">CNIC Number</label>
                     <input
@@ -516,6 +607,264 @@ export default function Employees() {
                     className="px-5 py-2 rounded-full bg-gradient-to-r from-brand-blue via-brand-violet to-brand-cyan text-brand-bg hover:scale-[1.02] transition-colors font-bold font-display text-xs cursor-pointer shadow-md shadow-brand-blue/15"
                   >
                     Save Profile
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* ---------------- Edit Employee Modal ---------------- */}
+      <AnimatePresence>
+        {editModalOpen && (
+          <>
+            <div className="fixed inset-0 bg-black/60 z-40 backdrop-blur-sm" onClick={() => setEditModalOpen(false)} />
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-2xl bg-brand-bg-elevated border border-brand-border rounded-2xl p-6 shadow-glow z-50 max-h-[85vh] overflow-y-auto"
+            >
+              <div className="flex items-center justify-between border-b border-brand-border pb-4 mb-6">
+                <h3 className="text-sm font-extrabold text-white font-display uppercase">Edit Employee Profile</h3>
+                <button onClick={() => setEditModalOpen(false)} className="p-1.5 rounded-xl border border-brand-border text-brand-text-soft hover:text-white cursor-pointer">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <form onSubmit={handleSubmitEdit(handleEditEmployee)} className="space-y-5">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Account Fields */}
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-brand-text-soft mb-2">Email Address *</label>
+                    <input
+                      type="email"
+                      {...registerEdit('email', { required: true })}
+                      placeholder="e.g. employee@brandigade.com"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-brand-border bg-brand-bg text-xs text-white focus:outline-none focus:border-brand-blue"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-brand-text-soft mb-2">Role *</label>
+                    <select
+                      {...registerEdit('role', { required: true })}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-brand-border bg-brand-bg text-xs text-white focus:outline-none cursor-pointer"
+                    >
+                      <option value="Employee">Employee</option>
+                      <option value="Team Lead">Team Lead</option>
+                      <option value="Admin">Admin</option>
+                      <option value="CEO">CEO</option>
+                      <option value="COO">COO</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-brand-text-soft mb-2">Login Status *</label>
+                    <select
+                      {...registerEdit('isActive', { setValueAs: v => v === 'true' })}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-brand-border bg-brand-bg text-xs text-white focus:outline-none cursor-pointer"
+                    >
+                      <option value="true">Active Login</option>
+                      <option value="false">Disabled / Blocked</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-brand-text-soft mb-2">Employment Status *</label>
+                    <select
+                      {...registerEdit('status', { required: true })}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-brand-border bg-brand-bg text-xs text-white focus:outline-none cursor-pointer"
+                    >
+                      <option value="active">Active</option>
+                      <option value="on_leave">On Leave</option>
+                      <option value="terminated">Terminated</option>
+                      <option value="resigned">Resigned</option>
+                    </select>
+                  </div>
+
+                  {/* Profile Details */}
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-brand-text-soft mb-2">Employee Code *</label>
+                    <input
+                      type="text"
+                      {...registerEdit('employeeCode', { required: true })}
+                      placeholder="e.g. EMP-004"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-brand-border bg-brand-bg text-xs text-white focus:outline-none focus:border-brand-blue"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-brand-text-soft mb-2">Full Name *</label>
+                    <input
+                      type="text"
+                      {...registerEdit('fullName', { required: true })}
+                      placeholder="e.g. Raameen Ali"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-brand-border bg-brand-bg text-xs text-white focus:outline-none focus:border-brand-blue"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-brand-text-soft mb-2">Designation *</label>
+                    <input
+                      type="text"
+                      {...registerEdit('designation', { required: true })}
+                      placeholder="e.g. SDR Outbound Campaigner"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-brand-border bg-brand-bg text-xs text-white focus:outline-none focus:border-brand-blue"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-brand-text-soft mb-2">Team</label>
+                    <select
+                      {...registerEdit('teamId')}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-brand-border bg-brand-bg text-xs text-white focus:outline-none cursor-pointer"
+                    >
+                      <option value="">None</option>
+                      {teams.map(t => (
+                        <option key={t.id} value={t.id}>{t.name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-brand-text-soft mb-2">Base Monthly Salary (PKR) *</label>
+                    <input
+                      type="number"
+                      {...registerEdit('baseSalary', { required: true })}
+                      placeholder="e.g. 55000"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-brand-border bg-brand-bg text-xs text-white focus:outline-none focus:border-brand-blue"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-brand-text-soft mb-2">Date of Joining *</label>
+                    <input
+                      type="date"
+                      {...registerEdit('dateOfJoining', { required: true })}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-brand-border bg-brand-bg text-xs text-white focus:outline-none focus:border-brand-blue"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-brand-text-soft mb-2">Biometric ZK Device User ID</label>
+                    <input
+                      type="text"
+                      {...registerEdit('zkUserId')}
+                      placeholder="e.g. 4"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-brand-border bg-brand-bg text-xs text-white focus:outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-brand-text-soft mb-2">Shift Start Time *</label>
+                    <input
+                      type="text"
+                      {...registerEdit('shiftStart', { required: true })}
+                      placeholder="e.g. 09:30"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-brand-border bg-brand-bg text-xs text-white focus:outline-none focus:border-brand-blue"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-brand-text-soft mb-2">Shift End Time *</label>
+                    <input
+                      type="text"
+                      {...registerEdit('shiftEnd', { required: true })}
+                      placeholder="e.g. 18:30"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-brand-border bg-brand-bg text-xs text-white focus:outline-none focus:border-brand-blue"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-brand-text-soft mb-2">Shift Grace Minutes *</label>
+                    <input
+                      type="number"
+                      {...registerEdit('graceMinutes', { required: true })}
+                      placeholder="e.g. 15"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-brand-border bg-brand-bg text-xs text-white focus:outline-none focus:border-brand-blue"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-brand-text-soft mb-2">Mobile Phone</label>
+                    <input
+                      type="text"
+                      {...registerEdit('phone')}
+                      placeholder="e.g. +92 300 1234567"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-brand-border bg-brand-bg text-xs text-white focus:outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-brand-text-soft mb-2">Emergency Contact</label>
+                    <input
+                      type="text"
+                      {...registerEdit('emergencyContact')}
+                      placeholder="e.g. Brother: +92 300 7654321"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-brand-border bg-brand-bg text-xs text-white focus:outline-none"
+                    />
+                  </div>
+
+                  <div className="col-span-2">
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-brand-text-soft mb-2">CNIC Number</label>
+                    <input
+                      type="text"
+                      {...registerEdit('cnic')}
+                      placeholder="e.g. 42101-1234567-1"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-brand-border bg-brand-bg text-xs text-white focus:outline-none"
+                    />
+                  </div>
+
+                  <div className="col-span-2">
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-brand-text-soft mb-2">Home Address</label>
+                    <textarea
+                      rows="2"
+                      {...registerEdit('address')}
+                      placeholder="e.g. House 123, Street 4, Karachi"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-brand-border bg-brand-bg text-xs text-white focus:outline-none"
+                    />
+                  </div>
+
+                  {/* Salary Change Reason (Log history) */}
+                  <div className="col-span-2 border-t border-brand-border pt-4 mt-2">
+                    <h4 className="text-[10px] font-bold uppercase tracking-wider text-brand-amber mb-3">Salary History Log (Optional)</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-[9px] font-bold uppercase tracking-wider text-brand-text-soft mb-2">Salary Change Effective Date</label>
+                        <input
+                          type="date"
+                          {...registerEdit('salaryChangeEffectiveDate')}
+                          className="w-full px-3.5 py-2.5 rounded-xl border border-brand-border bg-brand-bg text-xs text-white focus:outline-none focus:border-brand-blue"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[9px] font-bold uppercase tracking-wider text-brand-text-soft mb-2">Reason for Salary Change</label>
+                        <input
+                          type="text"
+                          {...registerEdit('salaryChangeReason')}
+                          placeholder="e.g. Annual Appraisal, Promotion"
+                          className="w-full px-3.5 py-2.5 rounded-xl border border-brand-border bg-brand-bg text-xs text-white focus:outline-none focus:border-brand-blue"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-6 flex gap-3 justify-end border-t border-brand-border pt-4">
+                  <button
+                    type="button"
+                    onClick={() => setEditModalOpen(false)}
+                    className="px-5 py-2 rounded-full border border-brand-border hover:bg-brand-bg font-semibold text-xs text-brand-text-soft hover:text-white transition-colors cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-5 py-2 rounded-full bg-gradient-to-r from-brand-amber to-brand-violet text-brand-bg hover:scale-[1.02] transition-colors font-bold font-display text-xs cursor-pointer shadow-md shadow-brand-amber/15"
+                  >
+                    Update Profile
                   </button>
                 </div>
               </form>

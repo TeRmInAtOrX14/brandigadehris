@@ -82,6 +82,7 @@ model Employee {
   
   shiftStart       String      @default("09:30")
   shiftEnd         String      @default("18:30")
+  graceMinutes     Int         @default(15)
   zkUserId         String?     @unique
 
   createdAt        DateTime    @default(now())

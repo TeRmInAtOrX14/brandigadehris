@@ -10,7 +10,11 @@ const app = express();
 // Security & Parsing Middlewares
 app.use(helmet());
 app.use(cors({
-  origin: true,
+  origin: [
+    'http://localhost:5173',
+    'https://hris.brandigade.com',
+    process.env.FRONTEND_URL
+  ].filter(Boolean),
   credentials: true,
 }));
 app.use(express.json());

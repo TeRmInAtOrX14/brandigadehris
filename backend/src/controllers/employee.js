@@ -6,6 +6,21 @@ const { sendMail } = require('../utils/mailer');
 const prisma = new PrismaClient();
 
 // ==============================================================================
+// Teams / Campaigns Metadata for filters and forms
+// ==============================================================================
+exports.getTeams = async (req, res, next) => {
+  try {
+    const campaigns = await prisma.campaign.findMany({
+      where: { status: 'active' },
+      select: { id: true, name: true }
+    });
+    res.json(campaigns);
+  } catch (err) {
+    next(err);
+  }
+};
+
+// ==============================================================================
 // Employees
 // ==============================================================================
 
@@ -57,7 +72,11 @@ exports.getEmployees = async (req, res, next) => {
       orderBy: { employeeCode: 'asc' }
     });
 
-    res.json(employees);
+    const mapped = employees.map(emp => ({
+      ...emp,
+      team: emp.campaignMembers?.[0]?.campaign || null
+    }));
+    res.json(mapped);
   } catch (err) {
     next(err);
   }
@@ -95,7 +114,10 @@ exports.getEmployeeById = async (req, res, next) => {
       return res.status(404).json({ error: 'Employee not found' });
     }
 
-    res.json(employee);
+    res.json({
+      ...employee,
+      team: employee.campaignMembers?.[0]?.campaign || null
+    });
   } catch (err) {
     next(err);
   }
@@ -121,7 +143,9 @@ exports.createEmployee = async (req, res, next) => {
       emergencyContact,
       shiftStart,
       shiftEnd,
-      zkUserId
+      zkUserId,
+      graceMinutes,
+      teamId
     } = req.body;
 
     // Check if user already exists
@@ -168,12 +192,28 @@ exports.createEmployee = async (req, res, next) => {
           emergencyContact: emergencyContact || null,
           shiftStart: shiftStart || '09:30',
           shiftEnd: shiftEnd || '18:30',
+          graceMinutes: graceMinutes !== undefined ? parseInt(graceMinutes) : 15,
           zkUserId: zkUserId || null
         },
         include: {
-          user: { select: { email: true, role: true } }
+          user: { select: { email: true, role: true } },
+          campaignMembers: {
+            where: { status: 'active' },
+            include: { campaign: true }
+          }
         }
       });
+
+      if (teamId) {
+        await tx.campaignMember.create({
+          data: {
+            campaignId: teamId,
+            employeeId: emp.id,
+            role: (role === 'Team Lead' || role === 'Admin') ? 'team_lead' : 'sdr',
+            status: 'active'
+          }
+        });
+      }
 
       // Log initial salary history
       await tx.salaryHistory.create({
@@ -185,11 +225,27 @@ exports.createEmployee = async (req, res, next) => {
         }
       });
 
-      return emp;
+      // Refetch employee with fresh campaign member details inside transaction to be clean
+      const freshEmp = await tx.employee.findUnique({
+        where: { id: emp.id },
+        include: {
+          user: { select: { email: true, role: true } },
+          campaignMembers: {
+            where: { status: 'active' },
+            include: { campaign: true }
+          }
+        }
+      });
+
+      return freshEmp;
     });
 
     await logAudit(req.user.id, 'CREATE_EMPLOYEE', 'Employee', newEmployee.id, { fullName, employeeCode });
-    res.status(201).json(newEmployee);
+    
+    res.status(201).json({
+      ...newEmployee,
+      team: newEmployee.campaignMembers?.[0]?.campaign || null
+    });
   } catch (err) {
     next(err);
   }
@@ -256,7 +312,46 @@ exports.updateEmployee = async (req, res, next) => {
         });
       }
 
-      // 3. Update employee fields
+      // 3. Handle Campaign Member changes if teamId is provided
+      if (updates.teamId !== undefined) {
+        // Deactivate all active campaigns
+        await tx.campaignMember.updateMany({
+          where: { employeeId: id, status: 'active' },
+          data: { status: 'inactive' }
+        });
+
+        if (updates.teamId) {
+          const finalRole = updates.role || currentEmp.user.role;
+          const memberRole = (finalRole === 'Team Lead' || finalRole === 'Admin') ? 'team_lead' : 'sdr';
+
+          const existing = await tx.campaignMember.findUnique({
+            where: {
+              campaignId_employeeId: {
+                campaignId: updates.teamId,
+                employeeId: id
+              }
+            }
+          });
+
+          if (existing) {
+            await tx.campaignMember.update({
+              where: { id: existing.id },
+              data: { status: 'active', role: memberRole }
+            });
+          } else {
+            await tx.campaignMember.create({
+              data: {
+                campaignId: updates.teamId,
+                employeeId: id,
+                role: memberRole,
+                status: 'active'
+              }
+            });
+          }
+        }
+      }
+
+      // 4. Update employee fields
       const emp = await tx.employee.update({
         where: { id },
         data: {
@@ -273,19 +368,40 @@ exports.updateEmployee = async (req, res, next) => {
           emergencyContact: updates.emergencyContact,
           shiftStart: updates.shiftStart,
           shiftEnd: updates.shiftEnd,
+          graceMinutes: updates.graceMinutes !== undefined ? parseInt(updates.graceMinutes) : undefined,
           zkUserId: updates.zkUserId,
           status: updates.status
         },
         include: {
-          user: { select: { email: true, role: true, isActive: true } }
+          user: { select: { email: true, role: true, isActive: true } },
+          campaignMembers: {
+            where: { status: 'active' },
+            include: { campaign: true }
+          }
         }
       });
 
-      return emp;
+      // Refetch employee with fresh relation details
+      const freshEmp = await tx.employee.findUnique({
+        where: { id },
+        include: {
+          user: { select: { email: true, role: true, isActive: true } },
+          campaignMembers: {
+            where: { status: 'active' },
+            include: { campaign: true }
+          }
+        }
+      });
+
+      return freshEmp;
     });
 
     await logAudit(req.user.id, 'UPDATE_EMPLOYEE', 'Employee', id, updates);
-    res.json(updatedEmployee);
+    
+    res.json({
+      ...updatedEmployee,
+      team: updatedEmployee.campaignMembers?.[0]?.campaign || null
+    });
   } catch (err) {
     next(err);
   }

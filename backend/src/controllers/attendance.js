@@ -173,7 +173,8 @@ exports.manualPunch = async (req, res, next) => {
       const shiftStartMins = sh * 60 + sm;
       const checkInMins = checkInDate.getHours() * 60 + checkInDate.getMinutes();
       const diff = checkInMins - shiftStartMins;
-      if (diff > 15) {
+      const grace = emp?.graceMinutes !== undefined ? emp.graceMinutes : 15;
+      if (diff > grace) {
         lateMins = diff;
       }
     }
