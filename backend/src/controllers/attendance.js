@@ -29,19 +29,27 @@ exports.getAttendance = async (req, res, next) => {
       }
       where.employeeId = req.user.employee.id;
     } else if (req.user.role === 'Team Lead') {
-      // Team Leads see their team's attendance unless looking for a specific employee
+      // Find active campaigns this TL leads
+      const ledCampaigns = await prisma.campaignMember.findMany({
+        where: { employeeId: req.user.employee?.id, role: 'team_lead', status: 'active' },
+        select: { campaignId: true }
+      });
+      const campaignIds = ledCampaigns.map(c => c.campaignId);
+
+      // Find active SDRs in these campaigns
+      const sdrs = await prisma.campaignMember.findMany({
+        where: { campaignId: { in: campaignIds }, status: 'active' },
+        select: { employeeId: true }
+      });
+      const sdrIds = sdrs.map(s => s.employeeId);
+
       if (employeeId) {
-        // Verify employee is in the lead's team
-        const targetEmp = await prisma.employee.findUnique({
-          where: { id: employeeId },
-          select: { teamId: true }
-        });
-        if (!targetEmp || targetEmp.teamId !== req.user.employee?.teamId) {
-          return res.status(403).json({ error: 'Access denied: employee not in your team.' });
+        if (!sdrIds.includes(employeeId)) {
+          return res.status(403).json({ error: 'Access denied.' });
         }
         where.employeeId = employeeId;
       } else {
-        where.employee = { teamId: req.user.employee?.teamId };
+        where.employeeId = { in: sdrIds };
       }
     } else {
       // Admins/Directors can filter by any employee
@@ -57,7 +65,10 @@ exports.getAttendance = async (req, res, next) => {
           select: { id: true, fullName: true, employeeCode: true, designation: true }
         }
       },
-      orderBy: { date: 'desc' }
+      orderBy: [
+        { date: 'desc' },
+        { checkIn: 'desc' }
+      ]
     });
 
     res.json(records);
