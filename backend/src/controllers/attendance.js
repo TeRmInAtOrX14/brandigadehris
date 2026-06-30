@@ -1,0 +1,201 @@
+const { PrismaClient } = require('@prisma/client');
+const { syncZKTeco } = require('../utils/zkteco');
+const { logAudit } = require('../utils/audit');
+
+const prisma = new PrismaClient();
+
+exports.getAttendance = async (req, res, next) => {
+  try {
+    const { startDate, endDate, employeeId } = req.query;
+
+    const where = {};
+    
+    // Date Range Filter
+    if (startDate || endDate) {
+      where.date = {};
+      if (startDate) {
+        where.date.gte = new Date(startDate);
+      }
+      if (endDate) {
+        where.date.lte = new Date(endDate);
+      }
+    }
+
+    // Role-based restrictions
+    if (req.user.role === 'Employee') {
+      // Regular employees can only see their own attendance
+      if (!req.user.employee) {
+        return res.status(400).json({ error: 'No employee profile linked to user.' });
+      }
+      where.employeeId = req.user.employee.id;
+    } else if (req.user.role === 'Team Lead') {
+      // Team Leads see their team's attendance unless looking for a specific employee
+      if (employeeId) {
+        // Verify employee is in the lead's team
+        const targetEmp = await prisma.employee.findUnique({
+          where: { id: employeeId },
+          select: { teamId: true }
+        });
+        if (!targetEmp || targetEmp.teamId !== req.user.employee?.teamId) {
+          return res.status(403).json({ error: 'Access denied: employee not in your team.' });
+        }
+        where.employeeId = employeeId;
+      } else {
+        where.employee = { teamId: req.user.employee?.teamId };
+      }
+    } else {
+      // Admins/Directors can filter by any employee
+      if (employeeId) {
+        where.employeeId = employeeId;
+      }
+    }
+
+    const records = await prisma.attendance.findMany({
+      where,
+      include: {
+        employee: {
+          select: { id: true, fullName: true, employeeCode: true, designation: true }
+        }
+      },
+      orderBy: { date: 'desc' }
+    });
+
+    res.json(records);
+  } catch (err) {
+    next(err);
+  }
+};
+
+exports.getAttendanceSummary = async (req, res, next) => {
+  try {
+    const { employeeId, year, month } = req.query;
+    
+    if (!employeeId || !year || !month) {
+      return res.status(400).json({ error: 'employeeId, year, and month are required' });
+    }
+
+    // RBAC check
+    if (req.user.role === 'Employee' && req.user.employee?.id !== employeeId) {
+      return res.status(403).json({ error: 'Access denied.' });
+    }
+
+    const startOfMonth = new Date(Date.UTC(parseInt(year), parseInt(month) - 1, 1));
+    const endOfMonth = new Date(Date.UTC(parseInt(year), parseInt(month), 0));
+
+    const records = await prisma.attendance.findMany({
+      where: {
+        employeeId,
+        date: {
+          gte: startOfMonth,
+          lte: endOfMonth
+        }
+      }
+    });
+
+    // Compute metrics
+    let present = 0;
+    let lateCount = 0;
+    let totalLateMinutes = 0;
+    let halfDays = 0;
+    let leaves = 0;
+    let overtimeMinutes = 0;
+
+    records.forEach(rec => {
+      if (rec.status === 'present') present++;
+      if (rec.status === 'half_day') halfDays++;
+      if (rec.status === 'leave') leaves++;
+      if (rec.late > 0) {
+        lateCount++;
+        totalLateMinutes += rec.late;
+      }
+      overtimeMinutes += rec.overtime;
+    });
+
+    res.json({
+      employeeId,
+      year: parseInt(year),
+      month: parseInt(month),
+      present,
+      halfDays,
+      leaves,
+      lateCount,
+      totalLateMinutes,
+      overtimeMinutes,
+      totalRecords: records.length
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+exports.syncAttendance = async (req, res, next) => {
+  try {
+    res.write(JSON.stringify({ message: 'Sync started...' }) + '\n');
+    const result = await syncZKTeco();
+    
+    await logAudit(req.user.id, 'SYNC_ZKTECO_ATTENDANCE', 'Attendance', null, result);
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+};
+
+exports.manualPunch = async (req, res, next) => {
+  try {
+    const { employeeId, date, status, checkIn, checkOut, note } = req.body;
+
+    if (!employeeId || !date || !status) {
+      return res.status(400).json({ error: 'employeeId, date, and status are required' });
+    }
+
+    const dateObj = new Date(date);
+    const dateMidnight = new Date(Date.UTC(dateObj.getFullYear(), dateObj.getMonth(), dateObj.getDate()));
+
+    const checkInDate = checkIn ? new Date(checkIn) : null;
+    const checkOutDate = checkOut ? new Date(checkOut) : null;
+
+    // Calculate late minutes if check-in is manual
+    let lateMins = 0;
+    if (checkInDate) {
+      const emp = await prisma.employee.findUnique({ where: { id: employeeId } });
+      const shiftStart = emp?.shiftStart || '09:30';
+      const [sh, sm] = shiftStart.split(':').map(Number);
+      const shiftStartMins = sh * 60 + sm;
+      const checkInMins = checkInDate.getHours() * 60 + checkInDate.getMinutes();
+      const diff = checkInMins - shiftStartMins;
+      if (diff > 15) {
+        lateMins = diff;
+      }
+    }
+
+    const record = await prisma.attendance.upsert({
+      where: {
+        employeeId_date: {
+          employeeId,
+          date: dateMidnight
+        }
+      },
+      create: {
+        employeeId,
+        date: dateMidnight,
+        status,
+        checkIn: checkInDate,
+        checkOut: checkOutDate,
+        late: lateMins,
+        note
+      },
+      update: {
+        status,
+        checkIn: checkInDate,
+        checkOut: checkOutDate,
+        late: lateMins,
+        note
+      }
+    });
+
+    await logAudit(req.user.id, 'MANUAL_ATTENDANCE_PUNCH', 'Attendance', record.id, { status, date });
+    res.json(record);
+  } catch (err) {
+    next(err);
+  }
+};

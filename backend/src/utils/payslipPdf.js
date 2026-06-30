@@ -1,4 +1,6 @@
 const PDFDocument = require('pdfkit');
+const fs = require('fs');
+const path = require('path');
 
 const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -11,26 +13,29 @@ function formatMoney(amount, currency) {
 }
 
 /**
- * Streams a payslip PDF to the given writable stream (e.g. an HTTP response).
+ * Generates a payslip PDF and pipes it to a writable stream.
  * payslip: { employee, periodMonth, periodYear, baseSalary, daysPresent, daysInPeriod,
- *            unpaidLeaveDeduction, bonus, otherDeductions, deductionNotes, bonusNotes, netPay }
+ *            unpaidLeaveDeduction, lateDeduction, loansDeduction, bonus, spiffs, commission,
+ *            otherDeductions, deductionNotes, bonusNotes, netPay, showups, meetingsScheduled, noShows }
  * company: { name, address }
  */
-function generatePayslipPdf(stream, payslip, company) {
+function generatePayslipPdf(stream, payslip, company = { name: 'Brandigade', address: 'Karachi, Pakistan' }) {
+  const doc = new PDFDocument({ margin: 50, size: 'A4' });
+  doc.pipe(stream);
+
   const logoPath = path.join(__dirname, '..', 'public', 'logo.png');
   if (fs.existsSync(logoPath)) {
     doc.image(logoPath, 50, 45, { width: 50 });
     doc.moveDown();
   }
-  doc.pipe(stream);
 
   const blue = '#2E75B6';
   const dark = '#1A1A1A';
   const gray = '#666666';
 
   // Header
-  doc.fontSize(20).fillColor(blue).font('Helvetica-Bold').text(company.name || 'Company', 50, 50);
-  doc.fontSize(9).fillColor(gray).font('Helvetica').text(company.address || '', 50, 75);
+  doc.fontSize(20).fillColor(blue).font('Helvetica-Bold').text(company.name || 'Brandigade', 50, 50);
+  doc.fontSize(9).fillColor(gray).font('Helvetica').text(company.address || 'Karachi, Pakistan', 50, 75);
 
   doc.moveTo(50, 100).lineTo(545, 100).strokeColor(blue).lineWidth(1.5).stroke();
 
@@ -43,11 +48,11 @@ function generatePayslipPdf(stream, payslip, company) {
   doc.fontSize(10).fillColor(dark).font('Helvetica-Bold').text('Employee Details', 50, y);
   y += 18;
   const empRows = [
-    ['Name', payslip.employee.full_name],
-    ['Employee Code', payslip.employee.employee_code],
+    ['Name', payslip.employee.fullName],
+    ['Employee Code', payslip.employee.employeeCode],
     ['Designation', payslip.employee.designation || '-'],
-    ['Department', payslip.employee.department || '-'],
-    ['Date of Joining', payslip.employee.date_of_joining || '-'],
+    ['Team', payslip.employee.team?.name || '-'],
+    ['Date of Joining', payslip.employee.dateOfJoining ? new Date(payslip.employee.dateOfJoining).toDateString() : '-'],
   ];
   doc.font('Helvetica').fontSize(10);
   empRows.forEach(([label, val]) => {
@@ -61,16 +66,16 @@ function generatePayslipPdf(stream, payslip, company) {
   y += 20;
 
   // Attendance summary
-  doc.fontSize(10).fillColor(dark).font('Helvetica-Bold').text('Attendance Summary', 50, y);
+  doc.fontSize(10).fillColor(dark).font('Helvetica-Bold').text('Attendance & Activity Summary', 50, y);
   y += 18;
   doc.font('Helvetica').fontSize(10);
   doc.fillColor(gray).text('Days in Period', 50, y);
   doc.fillColor(dark).text(String(payslip.daysInPeriod), 220, y);
   y += 16;
-  doc.fillColor(gray).text('Days Present', 50, y);
+  doc.fillColor(gray).text('Days Worked / Accounted', 50, y);
   doc.fillColor(dark).text(String(payslip.daysPresent), 220, y);
   y += 16;
-  if (payslip.showups !== undefined) {
+  if (payslip.showups !== undefined && payslip.showups > 0) {
     doc.fillColor(gray).text('Showups / Scheduled / No-Shows', 50, y);
     doc.fillColor(dark).text(`${payslip.showups} / ${payslip.meetingsScheduled || 0} / ${payslip.noShows || 0}`, 220, y);
     y += 16;
@@ -90,13 +95,13 @@ function generatePayslipPdf(stream, payslip, company) {
   y += 18;
 
   if (payslip.commission && payslip.commission > 0) {
-    doc.fillColor(gray).text('Commission', 50, y);
+    doc.fillColor(gray).text('Commission (Campaign Success)', 50, y);
     doc.fillColor(dark).text(formatMoney(payslip.commission, payslip.employee.currency), 420, y);
     y += 18;
   }
 
   if (payslip.spiffs && payslip.spiffs > 0) {
-    doc.fillColor(gray).text('Spiffs', 50, y);
+    doc.fillColor(gray).text('Spiffs (Individual Incentives)', 50, y);
     doc.fillColor(dark).text(formatMoney(payslip.spiffs, payslip.employee.currency), 420, y);
     y += 18;
   }
@@ -115,18 +120,35 @@ function generatePayslipPdf(stream, payslip, company) {
   y += 20;
 
   doc.font('Helvetica').fontSize(10);
+  let hasDeductions = false;
+
   if (payslip.unpaidLeaveDeduction && payslip.unpaidLeaveDeduction > 0) {
     doc.fillColor(gray).text('Unpaid Leave Deduction', 50, y);
     doc.fillColor(dark).text(formatMoney(payslip.unpaidLeaveDeduction, payslip.employee.currency), 420, y);
     y += 18;
+    hasDeductions = true;
+  }
+  if (payslip.lateDeduction && payslip.lateDeduction > 0) {
+    doc.fillColor(gray).text('Late Check-In Penalties', 50, y);
+    doc.fillColor(dark).text(formatMoney(payslip.lateDeduction, payslip.employee.currency), 420, y);
+    y += 18;
+    hasDeductions = true;
+  }
+  if (payslip.loansDeduction && payslip.loansDeduction > 0) {
+    doc.fillColor(gray).text('Loan / Advance Installment', 50, y);
+    doc.fillColor(dark).text(formatMoney(payslip.loansDeduction, payslip.employee.currency), 420, y);
+    y += 18;
+    hasDeductions = true;
   }
   if (payslip.otherDeductions && payslip.otherDeductions > 0) {
     doc.fillColor(gray).text('Other Deductions' + (payslip.deductionNotes ? ` (${payslip.deductionNotes})` : ''), 50, y, { width: 350 });
     doc.fillColor(dark).text(formatMoney(payslip.otherDeductions, payslip.employee.currency), 420, y);
     y += 18;
+    hasDeductions = true;
   }
-  if ((!payslip.unpaidLeaveDeduction || payslip.unpaidLeaveDeduction === 0) && (!payslip.otherDeductions || payslip.otherDeductions === 0)) {
-    doc.fillColor(gray).text('None', 50, y);
+  
+  if (!hasDeductions) {
+    doc.fillColor(gray).text('No deductions for this period', 50, y);
     y += 18;
   }
 

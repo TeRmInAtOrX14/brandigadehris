@@ -1,48 +1,177 @@
-require('dotenv').config();
+const { PrismaClient } = require('@prisma/client');
 const bcrypt = require('bcryptjs');
-const db = require('./index');
 
-function seed() {
-  const adminEmail = (process.env.ADMIN_EMAIL || 'admin@brandigade.com').toLowerCase();
-  const adminPassword = process.env.ADMIN_PASSWORD || 'changeme123';
-  const adminName = process.env.ADMIN_NAME || 'Admin';
+const prisma = new PrismaClient();
 
-  const existingAdmin = db.prepare(`SELECT id FROM users WHERE role = 'admin' LIMIT 1`).get();
+async function main() {
+  console.log('Starting database seed with actual teams...');
 
-  if (!existingAdmin) {
-    const hash = bcrypt.hashSync(adminPassword, 12);
-    const insertUser = db.prepare(`
-      INSERT INTO users (email, password_hash, role, is_active, must_change_password)
-      VALUES (?, ?, 'admin', 1, 1)
-    `);
-    const result = insertUser.run(adminEmail, hash);
+  // 1. Clean existing data (safe delete order due to foreign key constraints)
+  console.log('Cleaning existing data...');
+  await prisma.auditLog.deleteMany({});
+  await prisma.notification.deleteMany({});
+  await prisma.document.deleteMany({});
+  await prisma.payslip.deleteMany({});
+  await prisma.payrollRun.deleteMany({});
+  await prisma.loanRequest.deleteMany({});
+  await prisma.wfhRequest.deleteMany({});
+  await prisma.halfdayRequest.deleteMany({});
+  await prisma.leaveRequest.deleteMany({});
+  await prisma.attendance.deleteMany({});
+  await prisma.attendanceLog.deleteMany({});
+  await prisma.spiff.deleteMany({});
+  await prisma.teamCommission.deleteMany({});
+  await prisma.commission.deleteMany({});
+  await prisma.employeeProject.deleteMany({});
+  await prisma.project.deleteMany({});
+  await prisma.employee.deleteMany({});
+  await prisma.team.deleteMany({});
+  await prisma.user.deleteMany({});
 
-    db.prepare(`
-      INSERT INTO employees (user_id, employee_code, full_name, designation, department, date_of_joining, employment_status, base_salary)
-      VALUES (?, 'EMP-0001', ?, 'CEO & VP Growth', 'Management', date('now'), 'active', 0)
-    `).run(result.lastInsertRowid, adminName);
+  // 2. Seeding teams...
+  console.log('Seeding teams...');
+  const outreachTeam = await prisma.team.create({
+    data: { name: 'Brandigade Outreach' }
+  });
+  const lvglTeam = await prisma.team.create({
+    data: { name: 'LVGL' }
+  });
+  const cleoTeam = await prisma.team.create({
+    data: { name: 'Cleo HR' }
+  });
+  const logicsTeam = await prisma.team.create({
+    data: { name: 'Logics' }
+  });
+  const patientTeam = await prisma.team.create({
+    data: { name: 'PatientWing' }
+  });
 
-    console.log(`Admin account created: ${adminEmail} / ${adminPassword}`);
-    console.log('IMPORTANT: log in and change this password immediately.');
-  } else {
-    console.log('Admin account already exists, skipping admin creation.');
-  }
+  // 3. Create Users and Employee Profiles
+  console.log('Seeding users and employees...');
+  const salt = await bcrypt.genSalt(10);
+  const adminPasswordHash = await bcrypt.hash('admin123', salt);
+  const testPasswordHash = await bcrypt.hash('test123', salt);
 
-  const defaultLeaveTypes = [
-    { name: 'Annual Leave', annual_allowance: 14 },
-    { name: 'Sick Leave', annual_allowance: 10 },
-    { name: 'Casual Leave', annual_allowance: 7 },
-    { name: 'Unpaid Leave', annual_allowance: 0 },
-  ];
+  // Admin User
+  const adminUser = await prisma.user.create({
+    data: {
+      email: 'admin@brandigade.com',
+      passwordHash: adminPasswordHash,
+      role: 'Admin',
+      isActive: true,
+      mustChangePassword: false
+    }
+  });
 
-  const insertLeaveType = db.prepare(`
-    INSERT INTO leave_types (name, annual_allowance) VALUES (?, ?)
-    ON CONFLICT(name) DO NOTHING
-  `);
-  for (const lt of defaultLeaveTypes) {
-    insertLeaveType.run(lt.name, lt.annual_allowance);
-  }
-  console.log('Default leave types ensured: ' + defaultLeaveTypes.map(l => l.name).join(', '));
+  await prisma.employee.create({
+    data: {
+      userId: adminUser.id,
+      employeeCode: 'EMP-001',
+      fullName: 'Brandigade Admin',
+      designation: 'Administrator',
+      dateOfJoining: new Date('2025-01-01'),
+      status: 'active',
+      baseSalary: 120000.0,
+      currency: 'PKR',
+      phone: '+923001234567',
+      cnic: '42101-1111111-1',
+      shiftStart: '09:30',
+      shiftEnd: '18:30',
+    }
+  });
+
+  // Pseudo Test Employee (SDR / Outbound Campaigner under Brandigade Outreach)
+  const testUser = await prisma.user.create({
+    data: {
+      email: 'test@brandigade.com',
+      passwordHash: testPasswordHash,
+      role: 'Employee',
+      isActive: true,
+      mustChangePassword: false
+    }
+  });
+
+  const testEmployee = await prisma.employee.create({
+    data: {
+      userId: testUser.id,
+      employeeCode: 'EMP-002',
+      fullName: 'Kamran Khan',
+      designation: 'SDR Outbound Specialist',
+      teamId: outreachTeam.id,
+      dateOfJoining: new Date('2026-06-01'),
+      status: 'active',
+      baseSalary: 60000.0,
+      currency: 'PKR',
+      phone: '+923009998877',
+      cnic: '42101-2222222-2',
+      shiftStart: '10:00', // Custom Shift Start
+      shiftEnd: '19:00',   // Custom Shift End
+      zkUserId: '1002'     // Custom Biometric ID
+    }
+  });
+// Team Lead test user
+  const leadUser = await prisma.user.create({
+    data: {
+      email: 'lead@brandigade.com',
+      passwordHash: testPasswordHash,
+      role: 'Team Lead',
+      isActive: true,
+      mustChangePassword: false
+    }
+  });
+
+  const leadEmployee = await prisma.employee.create({
+    data: {
+      userId: leadUser.id,
+      employeeCode: 'EMP-003',
+      fullName: 'Aisha Khan',
+      designation: 'Team Lead',
+      teamId: outreachTeam.id,
+      dateOfJoining: new Date('2026-06-15'),
+      status: 'active',
+      baseSalary: 90000.0,
+      currency: 'PKR',
+      phone: '+923001112223',
+      cnic: '42101-3333333-3',
+      shiftStart: '09:00',
+      shiftEnd: '18:00'
+    }
+  });
+
+  // 5. Create Default Project/Campaign matching teams
+  console.log('Seeding projects...');
+  const outreachProj = await prisma.project.create({
+    data: { 
+      name: 'Outreach Leads', 
+      description: 'Outbound outreach campaign leads and targets',
+      settings: {
+        sdrSlabs: [
+          { min: 0, max: 5, rate: 1000 },
+          { min: 6, max: 10, rate: 1500 },
+          { min: 11, max: 999, rate: 2000 }
+        ],
+        teamSlabs: [
+          { minAvg: 0, maxAvg: 5, rate: 200 },
+          { minAvg: 6, maxAvg: 10, rate: 400 },
+          { minAvg: 11, maxAvg: 999, rate: 600 }
+        ]
+      }
+    }
+  });
+
+  // Link employee to project/campaign
+  await prisma.employeeProject.create({
+    data: { employeeId: testEmployee.id, projectId: outreachProj.id, role: 'sdr' }
+  });
+
+  console.log('Database seeding completed successfully!');
 }
 
-seed();
+main()
+  .catch((e) => {
+    console.error('Error seeding database:', e);
+    process.exit(1);
+  })
+  .finally(async () => {
+    await prisma.$disconnect();
+  });

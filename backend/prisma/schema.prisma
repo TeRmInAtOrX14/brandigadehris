@@ -1,0 +1,329 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ----------------------------------------------------------------------
+// Core Models
+// ----------------------------------------------------------------------
+
+model User {
+  id                 String    @id @default(uuid())
+  email              String    @unique
+  passwordHash       String
+  role               String    @default("Employee") // Admin, CEO, COO, Team Lead, SDR, Employee
+  googleId           String?   @unique
+  refreshToken       String?
+  isActive           Boolean   @default(true)
+  mustChangePassword Boolean   @default(true)
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  employee           Employee?
+  givenSpiffs        Spiff[]   @relation("SpiffGiver")
+  auditLogs          AuditLog[]
+  notifications      Notification[]
+}
+
+model CompanyProfile {
+  id        String   @id @default(uuid())
+  name      String
+  address   String?
+  logoUrl   String?
+  settings  Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Team {
+  id           String    @id @default(uuid())
+  name         String
+  employees    Employee[]
+  commissions  TeamCommission[]
+}
+
+model Employee {
+  id               String    @id @default(uuid())
+  userId           String    @unique
+  user             User      @relation(fields: [userId], references: [id])
+  
+  employeeCode     String    @unique
+  fullName         String
+  designation      String
+  teamId           String?
+  team             Team?       @relation(fields: [teamId], references: [id])
+  managerId        String?
+  manager          Employee?   @relation("EmployeeToManager", fields: [managerId], references: [id])
+  subordinates     Employee[]  @relation("EmployeeToManager")
+  
+  dateOfJoining    DateTime
+  status           String      @default("active") // active, on_leave, terminated, resigned
+  baseSalary       Float       @default(0)
+  currency         String      @default("PKR")
+  phone            String?
+  cnic             String?     @unique
+  bankAccount      String?
+  address          String?
+  emergencyContact String?
+  photoUrl         String?
+  
+  shiftStart       String      @default("09:30")
+  shiftEnd         String      @default("18:30")
+  zkUserId         String?     @unique
+
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+
+  // Relations
+  salaryHistory    SalaryHistory[]
+  employeeProjects EmployeeProject[]
+  spiffs           Spiff[]         @relation("EmployeeSpiff")
+  attendance       Attendance[]
+  leaveRequests    LeaveRequest[]
+  halfdayRequests  HalfdayRequest[]
+  wfhRequests      WfhRequest[]
+  loanRequests     LoanRequest[]
+  payslips         Payslip[]
+  documents        Document[]
+}
+
+// ----------------------------------------------------------------------
+// Compensation & History
+// ----------------------------------------------------------------------
+
+model SalaryHistory {
+  id            String   @id @default(uuid())
+  employeeId    String
+  employee      Employee @relation(fields: [employeeId], references: [id])
+  oldSalary     Float?
+  newSalary     Float
+  reason        String?
+  effectiveDate DateTime
+  createdById   String?
+  createdAt     DateTime @default(now())
+}
+
+model Project {
+  id               String            @id @default(uuid())
+  name             String            @unique
+  description      String?
+  status           String            @default("active")
+  settings         Json?
+  employeeProjects EmployeeProject[]
+  commissions      Commission[]
+}
+
+model EmployeeProject {
+  id         String   @id @default(uuid())
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id])
+  projectId  String
+  project    Project  @relation(fields: [projectId], references: [id])
+  role       String   // member, team_lead, sdr...
+
+  @@unique([employeeId, projectId])
+}
+
+model Commission {
+  id        String  @id @default(uuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id])
+  role      String
+  amount    Float
+
+  @@unique([projectId, role])
+}
+
+model TeamCommission {
+  id     String @id @default(uuid())
+  teamId String
+  team   Team   @relation(fields: [teamId], references: [id])
+  amount Float
+}
+
+model Spiff {
+  id         String   @id @default(uuid())
+  employeeId String
+  employee   Employee @relation("EmployeeSpiff", fields: [employeeId], references: [id])
+  givenById  String
+  givenBy    User     @relation("SpiffGiver", fields: [givenById], references: [id])
+  amount     Float
+  reason     String?
+  date       DateTime @default(now())
+}
+
+// ----------------------------------------------------------------------
+// Attendance & Leave
+// ----------------------------------------------------------------------
+
+model Attendance {
+  id             String   @id @default(uuid())
+  employeeId     String
+  employee       Employee @relation(fields: [employeeId], references: [id])
+  date           DateTime @db.Date
+  status         String   // present, absent, half_day, leave, holiday, weekend
+  checkIn        DateTime?
+  checkOut       DateTime?
+  late           Int      @default(0) // minutes late
+  earlyDeparture Int      @default(0) // minutes early
+  overtime       Int      @default(0) // minutes overtime
+  note           String?
+  zkSyncId       String?  // reference to ZKTeco log
+
+  @@unique([employeeId, date])
+}
+
+model AttendanceLog {
+  id        String   @id @default(uuid())
+  zkUserId  String
+  timestamp DateTime
+  type      String   // check-in, check-out
+  syncedAt  DateTime @default(now())
+}
+
+model LeaveRequest {
+  id           String   @id @default(uuid())
+  employeeId   String
+  employee     Employee @relation(fields: [employeeId], references: [id])
+  type         String   // annual, sick, unpaid...
+  startDate    DateTime @db.Date
+  endDate      DateTime @db.Date
+  days         Float
+  reason       String?
+  status       String   @default("pending") // pending, approved, rejected
+  reviewedById String?
+  reviewedAt   DateTime?
+  createdAt    DateTime @default(now())
+}
+
+model HalfdayRequest {
+  id           String   @id @default(uuid())
+  employeeId   String
+  employee     Employee @relation(fields: [employeeId], references: [id])
+  date         DateTime @db.Date
+  reason       String?
+  status       String   @default("pending")
+  reviewedById String?
+  reviewedAt   DateTime?
+  createdAt    DateTime @default(now())
+}
+
+model WfhRequest {
+  id           String   @id @default(uuid())
+  employeeId   String
+  employee     Employee @relation(fields: [employeeId], references: [id])
+  startDate    DateTime @db.Date
+  endDate      DateTime @db.Date
+  reason       String?
+  status       String   @default("pending")
+  reviewedById String?
+  reviewedAt   DateTime?
+  createdAt    DateTime @default(now())
+}
+
+// ----------------------------------------------------------------------
+// Payroll & Loans
+// ----------------------------------------------------------------------
+
+model LoanRequest {
+  id               String   @id @default(uuid())
+  employeeId       String
+  employee         Employee @relation(fields: [employeeId], references: [id])
+  type             String   // loan, advance_salary
+  amount           Float
+  reason           String?
+  status           String   @default("pending")
+  repaymentMonth   Int?
+  repaymentYear    Int?
+  reviewedById     String?
+  reviewedAt       DateTime?
+  createdAt        DateTime @default(now())
+}
+
+model PayrollRun {
+  id          String    @id @default(uuid())
+  periodMonth Int
+  periodYear  Int
+  status      String    @default("draft") // draft, finalized
+  createdById String?
+  createdAt   DateTime  @default(now())
+  finalizedAt DateTime?
+  
+  payslips    Payslip[]
+
+  @@unique([periodMonth, periodYear])
+}
+
+model Payslip {
+  id                   String     @id @default(uuid())
+  payrollRunId         String
+  payrollRun           PayrollRun @relation(fields: [payrollRunId], references: [id])
+  employeeId           String
+  employee             Employee   @relation(fields: [employeeId], references: [id])
+  
+  baseSalary           Float
+  daysPresent          Float      @default(0)
+  daysInPeriod         Int        @default(0)
+  
+  unpaidLeaveDeduction Float      @default(0)
+  lateDeduction        Float      @default(0)
+  loansDeduction       Float      @default(0)
+  otherDeductions      Float      @default(0)
+  
+  bonus                Float      @default(0)
+  commission           Float      @default(0)
+  spiffs               Float      @default(0)
+  
+  netPay               Float
+  
+  showups              Int        @default(0)
+  meetingsScheduled    Int        @default(0)
+  noShows              Int        @default(0)
+  
+  pdfUrl               String?    // link to Supabase Storage
+  generatedAt          DateTime   @default(now())
+
+  @@unique([payrollRunId, employeeId])
+}
+
+// ----------------------------------------------------------------------
+// System & Logs
+// ----------------------------------------------------------------------
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  title     String
+  message   String
+  type      String   // system, leave, payroll, loan...
+  isRead    Boolean  @default(false)
+  link      String?
+  createdAt DateTime @default(now())
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id])
+  action     String
+  entityType String
+  entityId   String?
+  details    Json?
+  createdAt  DateTime @default(now())
+}
+
+model Document {
+  id           String   @id @default(uuid())
+  employeeId   String
+  employee     Employee @relation(fields: [employeeId], references: [id])
+  name         String
+  type         String   // contract, id, medical, receipt...
+  fileUrl      String   // link to Supabase Storage
+  uploadedById String
+  createdAt    DateTime @default(now())
+}

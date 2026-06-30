@@ -1,0 +1,381 @@
+import React, { useEffect, useState } from 'react';
+import { useForm, useFieldArray } from 'react-hook-form';
+import {
+  Plus,
+  Play,
+  Download,
+  X,
+  Loader2
+} from 'lucide-react';
+import api from '../utils/api';
+import toast from 'react-hot-toast';
+
+export default function Payroll() {
+  const [runs, setRuns] = useState([]);
+  const [employees, setEmployees] = useState([]);
+  const [draftPayslips, setDraftPayslips] = useState([]);
+  const [selectedRun, setSelectedRun] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  // Modals
+  const [runModalOpen, setRunModalOpen] = useState(false);
+
+  const currentUser = JSON.parse(localStorage.getItem('user')) || { role: 'Employee' };
+  const isAdmin = ['Admin', 'CEO', 'COO'].includes(currentUser.role);
+  
+  const { register, handleSubmit, control, reset } = useForm({
+    defaultValues: {
+      month: new Date().getMonth() + 1,
+      year: new Date().getFullYear(),
+      performance: []
+    }
+  });
+
+  const { fields, replace } = useFieldArray({
+    control,
+    name: 'performance'
+  });
+
+  const fetchPayrollData = async () => {
+    try {
+      setLoading(true);
+      if (isAdmin) {
+        const runsRes = await api.get('/payroll/runs');
+        setRuns(runsRes.data);
+        
+        const empRes = await api.get('/employees');
+        setEmployees(empRes.data);
+
+        // Prep the performance array default values
+        const perfDefaults = empRes.data.map(emp => ({
+          employeeId: emp.id,
+          fullName: emp.fullName,
+          showups: 0,
+          meetingsScheduled: 0,
+          noShows: 0,
+          bonus: 0,
+          bonusNotes: '',
+          otherDeductions: 0,
+          deductionNotes: ''
+        }));
+        replace(perfDefaults);
+      } else {
+        const res = await api.get('/payroll/my-payslips');
+        setRuns(res.data);
+      }
+    } catch (e) {
+      toast.error('Failed to load payroll logs');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchPayrollData();
+  }, []);
+
+  const handleRunPayroll = async (data) => {
+    try {
+      toast.loading('Computing payroll parameters...', { id: 'payroll-run' });
+      const res = await api.post('/payroll/run', {
+        month: parseInt(data.month),
+        year: parseInt(data.year),
+        performance: data.performance.map(p => ({
+          employeeId: p.employeeId,
+          showups: parseInt(p.showups) || 0,
+          meetingsScheduled: parseInt(p.meetingsScheduled) || 0,
+          noShows: parseInt(p.noShows) || 0,
+          bonus: parseFloat(p.bonus) || 0,
+          bonusNotes: p.bonusNotes,
+          otherDeductions: parseFloat(p.otherDeductions) || 0,
+          deductionNotes: p.deductionNotes
+        }))
+      });
+
+      toast.success('Payroll calculated! Reviewing draft payslips.', { id: 'payroll-run' });
+      setSelectedRun(res.data.payrollRun);
+      setDraftPayslips(res.data.payslips);
+      setRunModalOpen(false);
+      reset();
+      fetchPayrollData();
+    } catch (e) {
+      toast.error('Failed to calculate payroll runs', { id: 'payroll-run' });
+    }
+  };
+
+  const handleFinalize = async (runId) => {
+    try {
+      toast.loading('Finalizing payroll and generating PDFs...', { id: 'payroll-finalize' });
+      await api.put(`/payroll/runs/${runId}/finalize`);
+      toast.success('Payroll run finalized successfully!', { id: 'payroll-finalize' });
+      
+      setSelectedRun(null);
+      setDraftPayslips([]);
+      fetchPayrollData();
+    } catch (e) {
+      toast.error('Failed to finalize payroll', { id: 'payroll-finalize' });
+    }
+  };
+
+  const fetchPayslipsOfRun = async (run) => {
+    try {
+      setSelectedRun(run);
+      const res = await api.get(`/payroll/runs/${run.id}/payslips`);
+      setDraftPayslips(res.data);
+    } catch (e) {
+      toast.error('Failed to load payslips for this run');
+    }
+  };
+
+  const handleDownloadPdf = (payslipId) => {
+    const token = localStorage.getItem('accessToken');
+    const baseUrl = api.defaults.baseURL || 'http://localhost:4000/api';
+    const downloadUrl = `${baseUrl}/payroll/payslips/${payslipId}/pdf?token=${token}`;
+    window.open(downloadUrl, '_blank');
+  };
+
+  const MONTH_NAMES = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
+  ];
+
+  return (
+    <div className="space-y-6 text-left">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
+        <div>
+          <h2 className="text-xl font-extrabold tracking-tight text-white font-display uppercase">Payroll & Payslips</h2>
+          <p className="text-xs text-brand-text-soft mt-1">Review finalized monthly payroll payouts or process target campaign data.</p>
+        </div>
+        {isAdmin && (
+          <button
+            onClick={() => setRunModalOpen(true)}
+            className="px-5 py-2.5 rounded-full bg-gradient-to-r from-brand-blue via-brand-violet to-brand-cyan text-brand-bg hover:scale-[1.02] active:scale-[0.98] font-bold font-display text-xs transition-all flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-brand-blue/20"
+          >
+            <Play className="w-4 h-4" />
+            Process New Month
+          </button>
+        )}
+      </div>
+
+      {loading ? (
+        <div className="py-12 flex justify-center">
+          <Loader2 className="w-6 h-6 animate-spin text-brand-cyan" />
+        </div>
+      ) : !isAdmin ? (
+        /* ---------------- Employee View ---------------- */
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {runs.map(payslip => (
+            <div key={payslip.id} className="p-5 rounded-2xl glass-panel space-y-4">
+              <div className="flex justify-between items-start">
+                <div>
+                  <h3 className="text-[10px] font-bold text-brand-text-soft uppercase tracking-widest">Finalized Payslip</h3>
+                  <p className="text-lg font-extrabold text-white font-display mt-2">
+                    {MONTH_NAMES[payslip.payrollRun?.periodMonth - 1]} {payslip.payrollRun?.periodYear}
+                  </p>
+                </div>
+                <span className="px-2.5 py-0.5 rounded-full text-[9px] font-extrabold border bg-brand-green/10 text-brand-green border-brand-green/20 uppercase tracking-wider">
+                  Paid
+                </span>
+              </div>
+
+              <div className="border-t border-brand-border pt-3 flex justify-between items-center">
+                <div>
+                  <span className="text-[9px] text-brand-text-mute uppercase font-bold tracking-wider">Net Salary Payout</span>
+                  <p className="text-base font-extrabold text-white mt-1 font-mono">PKR {payslip.netPay.toLocaleString()}</p>
+                </div>
+
+                <button
+                  onClick={() => handleDownloadPdf(payslip.id)}
+                  className="p-2.5 rounded-xl border border-brand-border hover:border-brand-blue-soft text-brand-text-soft hover:text-white transition-colors cursor-pointer"
+                  title="View / Print PDF"
+                >
+                  <Download className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        /* ---------------- Admin View ---------------- */
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* History Lists */}
+          <div className="lg:col-span-1 space-y-4">
+            <h3 className="text-xs font-bold text-white uppercase tracking-widest font-display border-b border-brand-border pb-2">Payroll Runs History</h3>
+            <div className="space-y-3">
+              {runs.map(run => (
+                <div
+                  key={run.id}
+                  onClick={() => fetchPayslipsOfRun(run)}
+                  className={`p-4 rounded-2xl border transition-all cursor-pointer text-left ${
+                    selectedRun?.id === run.id
+                      ? 'border-brand-blue/50 bg-brand-blue/5'
+                      : 'border-brand-border bg-brand-bg-soft/40 hover:border-brand-border-strong'
+                  }`}
+                >
+                  <div className="flex justify-between items-center">
+                    <p className="text-sm font-extrabold text-white font-display">
+                      {MONTH_NAMES[run.periodMonth - 1]} {run.periodYear}
+                    </p>
+                    <span className={`px-2 py-0.5 rounded-full text-[8px] font-extrabold border uppercase tracking-wider ${
+                      run.status === 'finalized'
+                        ? 'bg-brand-green/10 text-brand-green border-brand-green/20'
+                        : 'bg-brand-blue/10 text-brand-cyan border-brand-blue/20'
+                    }`}>
+                      {run.status}
+                    </span>
+                  </div>
+                  <p className="text-[9px] text-brand-text-mute font-mono mt-1">Processed: {new Date(run.createdAt).toLocaleDateString()}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Detailed Run View */}
+          <div className="lg:col-span-2 space-y-6">
+            {selectedRun ? (
+              <div className="p-6 rounded-2xl glass-panel space-y-5">
+                <div className="flex justify-between items-center border-b border-brand-border pb-4">
+                  <div>
+                    <h3 className="text-base font-extrabold text-white font-display">
+                      Run Details: {MONTH_NAMES[selectedRun.periodMonth - 1]} {selectedRun.periodYear}
+                    </h3>
+                    <p className="text-xs text-brand-text-soft mt-1">Includes {draftPayslips.length} calculated payslips.</p>
+                  </div>
+
+                  {selectedRun.status === 'draft' && (
+                    <button
+                      onClick={() => handleFinalize(selectedRun.id)}
+                      className="px-5 py-2 rounded-full bg-brand-green hover:bg-brand-green/80 text-xs font-bold text-brand-bg transition-colors cursor-pointer shadow-lg shadow-brand-green/15"
+                    >
+                      Finalize & Generate PDFs
+                    </button>
+                  )}
+                </div>
+
+                {/* Payslip Sub-table */}
+                <div className="space-y-3 max-h-[50vh] overflow-y-auto pr-1">
+                  {draftPayslips.map(payslip => (
+                    <div key={payslip.id} className="p-4 rounded-xl border border-brand-border bg-brand-bg-soft/40 flex flex-col sm:flex-row justify-between sm:items-center gap-4 text-xs text-brand-text-soft">
+                      <div>
+                        <p className="font-bold text-white">{payslip.employee?.fullName}</p>
+                        <p className="text-[10px] text-brand-text-mute mt-0.5">{payslip.employee?.designation}</p>
+                      </div>
+
+                      <div className="flex items-center gap-4 justify-between sm:justify-end w-full sm:w-auto">
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-left sm:text-right font-mono text-[11px]">
+                          <div>
+                            <span className="text-[8px] text-brand-text-mute uppercase block font-semibold">Base pay</span>
+                            <span className="text-white font-medium">{payslip.baseSalary.toLocaleString()}</span>
+                          </div>
+                          <div>
+                            <span className="text-[8px] text-brand-text-mute uppercase block font-semibold">Incentives</span>
+                            <span className="text-brand-green font-bold">{(payslip.commission + payslip.spiffs + payslip.bonus).toLocaleString()}</span>
+                          </div>
+                          <div>
+                            <span className="text-[8px] text-brand-text-mute uppercase block font-semibold">Deductions</span>
+                            <span className="text-brand-amber font-bold">{(payslip.unpaidLeaveDeduction + payslip.lateDeduction + payslip.loansDeduction + payslip.otherDeductions).toLocaleString()}</span>
+                          </div>
+                          <div>
+                            <span className="text-[8px] text-brand-text-mute uppercase block font-semibold font-sans">Net Pay</span>
+                            <span className="text-white font-extrabold text-xs">{payslip.netPay.toLocaleString()}</span>
+                          </div>
+                        </div>
+
+                        {selectedRun.status === 'finalized' && (
+                          <button
+                            onClick={() => handleDownloadPdf(payslip.id)}
+                            className="p-2 rounded-xl border border-brand-border hover:border-brand-blue-soft text-brand-text-soft hover:text-white transition-all cursor-pointer shrink-0"
+                            title="Download PDF"
+                          >
+                            <Download className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="p-8 text-center border border-dashed border-brand-border rounded-2xl">
+                <p className="text-xs text-brand-text-soft">Select a payroll run from the history panel to view details</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ---------------- Run Payroll Modal ---------------- */}
+      {runModalOpen && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center">
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setRunModalOpen(false)} />
+          <div className="bg-brand-bg-elevated border border-brand-border rounded-2xl p-6 w-full max-w-4xl shadow-glow relative z-50 text-left max-h-[85vh] overflow-y-auto">
+            <div className="flex justify-between items-center border-b border-brand-border pb-3 mb-6">
+              <h3 className="text-sm font-extrabold text-white uppercase font-display">Compute Monthly Payroll Payouts</h3>
+              <button onClick={() => setRunModalOpen(false)} className="p-1 rounded text-brand-text-soft hover:text-white cursor-pointer"><X className="w-4 h-4" /></button>
+            </div>
+            
+            <form onSubmit={handleSubmit(handleRunPayroll)} className="space-y-6">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-bold uppercase text-brand-text-soft mb-1.5">Select Month</label>
+                  <select {...register('month')} className="w-full px-3.5 py-2.5 rounded-xl bg-brand-bg border border-brand-border text-xs text-white focus:outline-none cursor-pointer">
+                    {MONTH_NAMES.map((m, idx) => (
+                      <option key={m} value={idx + 1}>{m}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold uppercase text-brand-text-soft mb-1.5">Select Year</label>
+                  <select {...register('year')} className="w-full px-3.5 py-2.5 rounded-xl bg-brand-bg border border-brand-border text-xs text-white focus:outline-none cursor-pointer">
+                    <option value="2026">2026</option>
+                    <option value="2027">2027</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Performance fields */}
+              <div className="space-y-4">
+                <h4 className="text-xs font-bold text-white uppercase tracking-widest font-display">Input SDR Campaign Metrics</h4>
+                <div className="space-y-3.5 max-h-80 overflow-y-auto pr-2">
+                  {fields.map((field, index) => (
+                    <div key={field.id} className="p-4 rounded-xl border border-brand-border bg-brand-bg/40 space-y-4">
+                      <div className="flex justify-between items-center border-b border-brand-border pb-2">
+                        <span className="text-xs font-bold text-white">{field.fullName}</span>
+                      </div>
+
+                      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-xs">
+                        <div>
+                          <label className="block text-[9px] text-brand-text-mute uppercase font-bold tracking-wider mb-1">Showups</label>
+                          <input type="number" {...register(`performance.${index}.showups`)} className="w-full px-2.5 py-1.5 rounded-lg bg-brand-bg border border-brand-border text-xs text-white focus:outline-none focus:border-brand-blue" />
+                        </div>
+                        <div>
+                          <label className="block text-[9px] text-brand-text-mute uppercase font-bold tracking-wider mb-1">Scheduled</label>
+                          <input type="number" {...register(`performance.${index}.meetingsScheduled`)} className="w-full px-2.5 py-1.5 rounded-lg bg-brand-bg border border-brand-border text-xs text-white focus:outline-none focus:border-brand-blue" />
+                        </div>
+                        <div>
+                          <label className="block text-[9px] text-brand-text-mute uppercase font-bold tracking-wider mb-1">No-Shows</label>
+                          <input type="number" {...register(`performance.${index}.noShows`)} className="w-full px-2.5 py-1.5 rounded-lg bg-brand-bg border border-brand-border text-xs text-white focus:outline-none focus:border-brand-blue" />
+                        </div>
+                        <div>
+                          <label className="block text-[9px] text-brand-text-mute uppercase font-bold tracking-wider mb-1">Bonus Amount</label>
+                          <input type="number" {...register(`performance.${index}.bonus`)} className="w-full px-2.5 py-1.5 rounded-lg bg-brand-bg border border-brand-border text-xs text-white focus:outline-none focus:border-brand-blue" />
+                        </div>
+                        <div>
+                          <label className="block text-[9px] text-brand-text-mute uppercase font-bold tracking-wider mb-1">Bonus Note</label>
+                          <input type="text" {...register(`performance.${index}.bonusNotes`)} placeholder="e.g. Sales winner" className="w-full px-2.5 py-1.5 rounded-lg bg-brand-bg border border-brand-border text-xs text-white focus:outline-none focus:border-brand-blue" />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <button type="submit" className="w-full py-3 rounded-full bg-gradient-to-r from-brand-blue via-brand-violet to-brand-cyan text-brand-bg font-bold font-display text-xs cursor-pointer shadow-md shadow-brand-blue/15">Calculate Draft Run</button>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
