@@ -130,7 +130,6 @@ exports.getAttendanceSummary = async (req, res, next) => {
 
 exports.syncAttendance = async (req, res, next) => {
   try {
-    res.write(JSON.stringify({ message: 'Sync started...' }) + '\n');
     const result = await syncZKTeco();
     
     await logAudit(req.user.id, 'SYNC_ZKTECO_ATTENDANCE', 'Attendance', null, result);

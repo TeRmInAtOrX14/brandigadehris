@@ -85,6 +85,11 @@ async function syncZKTeco() {
       }
 
       const punchTime = new Date(log.recordTime);
+      if (punchTime < new Date('2026-06-01T00:00:00')) {
+        skipped++;
+        continue;
+      }
+
       const dateMidnight = getLocalDateMidnight(punchTime);
       const dateKey = dateMidnight.toISOString().split('T')[0];
       const key = `${emp.id}_${dateKey}`;
