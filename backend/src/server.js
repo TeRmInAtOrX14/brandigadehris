@@ -55,4 +55,19 @@ app.use(errorHandler);
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => {
   console.log(`HRIS Backend running on port ${PORT}`);
+  
+  // Start Biometric Auto-Sync Scheduler (Every 5 minutes)
+  const { syncZKTeco } = require('./utils/zkteco');
+  const AUTO_SYNC_INTERVAL = 5 * 60 * 1000; // 5 minutes in ms
+
+  console.log(`[Scheduler] Biometric logs auto-sync active (Interval: 5 minutes)`);
+  setInterval(async () => {
+    console.log('[Scheduler] Initiating automatic biometric logs synchronization...');
+    try {
+      const result = await syncZKTeco();
+      console.log(`[Scheduler] Auto-sync finished. Synced: ${result.synced}, Skipped: ${result.skipped}, Errors: ${result.errors.length}`);
+    } catch (err) {
+      console.error('[Scheduler] Auto-sync encountered an error:', err.message);
+    }
+  }, AUTO_SYNC_INTERVAL);
 });
