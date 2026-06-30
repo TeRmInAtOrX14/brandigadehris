@@ -74,7 +74,8 @@ exports.getEmployees = async (req, res, next) => {
 
     const mapped = employees.map(emp => ({
       ...emp,
-      team: emp.campaignMembers?.[0]?.campaign || null
+      team: emp.campaignMembers?.[0]?.campaign || null,
+      teams: emp.campaignMembers.map(m => m.campaign)
     }));
     res.json(mapped);
   } catch (err) {
@@ -116,7 +117,8 @@ exports.getEmployeeById = async (req, res, next) => {
 
     res.json({
       ...employee,
-      team: employee.campaignMembers?.[0]?.campaign || null
+      team: employee.campaignMembers?.[0]?.campaign || null,
+      teams: employee.campaignMembers.map(m => m.campaign)
     });
   } catch (err) {
     next(err);
@@ -204,12 +206,16 @@ exports.createEmployee = async (req, res, next) => {
         }
       });
 
-      if (teamId) {
+      const finalRole = role || 'Employee';
+      const memberRole = (finalRole === 'Team Lead' || finalRole === 'Admin' || finalRole === 'CEO' || finalRole === 'COO') ? 'team_lead' : 'sdr';
+
+      const selectedTeams = req.body.teamIds || (teamId ? [teamId] : []);
+      for (const tId of selectedTeams) {
         await tx.campaignMember.create({
           data: {
-            campaignId: teamId,
+            campaignId: tId,
             employeeId: emp.id,
-            role: (role === 'Team Lead' || role === 'Admin') ? 'team_lead' : 'sdr',
+            role: memberRole,
             status: 'active'
           }
         });
@@ -313,21 +319,28 @@ exports.updateEmployee = async (req, res, next) => {
       }
 
       // 3. Handle Campaign Member changes if teamId is provided
-      if (updates.teamId !== undefined) {
-        // Deactivate all active campaigns
+      // 3. Handle Campaign Member changes if teamId or teamIds is provided
+      if (updates.teamIds !== undefined || updates.teamId !== undefined) {
+        const selectedTeams = updates.teamIds || (updates.teamId ? [updates.teamId] : []);
+
+        // Deactivate active campaigns that are not in the selected list
         await tx.campaignMember.updateMany({
-          where: { employeeId: id, status: 'active' },
+          where: {
+            employeeId: id,
+            status: 'active',
+            campaignId: { notIn: selectedTeams }
+          },
           data: { status: 'inactive' }
         });
 
-        if (updates.teamId) {
-          const finalRole = updates.role || currentEmp.user.role;
-          const memberRole = (finalRole === 'Team Lead' || finalRole === 'Admin') ? 'team_lead' : 'sdr';
+        const finalRole = updates.role || currentEmp.user.role;
+        const memberRole = (finalRole === 'Team Lead' || finalRole === 'Admin' || finalRole === 'CEO' || finalRole === 'COO') ? 'team_lead' : 'sdr';
 
+        for (const tId of selectedTeams) {
           const existing = await tx.campaignMember.findUnique({
             where: {
               campaignId_employeeId: {
-                campaignId: updates.teamId,
+                campaignId: tId,
                 employeeId: id
               }
             }
@@ -341,7 +354,7 @@ exports.updateEmployee = async (req, res, next) => {
           } else {
             await tx.campaignMember.create({
               data: {
-                campaignId: updates.teamId,
+                campaignId: tId,
                 employeeId: id,
                 role: memberRole,
                 status: 'active'

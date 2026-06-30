@@ -73,7 +73,7 @@ export default function Employees() {
       employeeCode: emp.employeeCode || '',
       fullName: emp.fullName || '',
       designation: emp.designation || '',
-      teamId: emp.team?.id || '',
+      teamIds: emp.campaignMembers?.map(m => m.campaign.id) || [],
       baseSalary: emp.baseSalary || 0,
       dateOfJoining: formattedDate,
       zkUserId: emp.zkUserId || '',
@@ -253,7 +253,17 @@ export default function Employees() {
                     <td className="p-4 font-bold text-white">{emp.fullName}</td>
                     <td className="p-4 text-brand-text-soft">{emp.designation}</td>
                     <td className="p-4">
-                      <div className="font-semibold text-white">{emp.team?.name || 'No Team'}</div>
+                      <div className="flex flex-wrap gap-1">
+                        {emp.campaignMembers && emp.campaignMembers.length > 0 ? (
+                          emp.campaignMembers.map(m => (
+                            <span key={m.campaign.id} className="px-2 py-0.5 rounded-lg bg-brand-blue/10 text-brand-blue text-[9px] font-extrabold uppercase tracking-wide border border-brand-blue/20">
+                              {m.campaign.name}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="text-brand-text-mute text-[10px]">No Team</span>
+                        )}
+                      </div>
                     </td>
                     <td className="p-4 font-medium text-brand-text-soft font-mono">{emp.shiftStart} - {emp.shiftEnd}</td>
                     <td className="p-4">
@@ -332,8 +342,18 @@ export default function Employees() {
                       <p className="text-xs text-white font-semibold mt-1">{detailEmployee.designation}</p>
                     </div>
                     <div>
-                      <p className="text-[9px] text-brand-text-mute uppercase font-bold tracking-wider">Team Assigned</p>
-                      <p className="text-xs text-white font-semibold mt-1">{detailEmployee.team?.name || 'No Team'}</p>
+                      <p className="text-[9px] text-brand-text-mute uppercase font-bold tracking-wider">Teams Assigned</p>
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {detailEmployee.campaignMembers && detailEmployee.campaignMembers.length > 0 ? (
+                          detailEmployee.campaignMembers.map(m => (
+                            <span key={m.campaign.id} className="px-1.5 py-0.5 rounded bg-brand-blue/10 text-brand-blue text-[9px] font-extrabold uppercase tracking-wide border border-brand-blue/20">
+                              {m.campaign.name}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="text-brand-text-mute text-xs">No Team</span>
+                        )}
+                      </div>
                     </div>
                     <div>
                       <p className="text-[9px] text-brand-text-mute uppercase font-bold tracking-wider">Date of Joining</p>
@@ -507,17 +527,21 @@ export default function Employees() {
                     />
                   </div>
 
-                  <div>
-                    <label className="block text-[10px] font-bold uppercase tracking-wider text-brand-text-soft mb-2">Team</label>
-                    <select
-                      {...register('teamId')}
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-brand-border bg-brand-bg text-xs text-white focus:outline-none cursor-pointer"
-                    >
-                      <option value="">None</option>
+                  <div className="col-span-2">
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-brand-text-soft mb-2">Projects / Teams Assigned</label>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-2.5 p-3.5 rounded-xl border border-brand-border bg-brand-bg">
                       {teams.map(t => (
-                        <option key={t.id} value={t.id}>{t.name}</option>
+                        <label key={t.id} className="flex items-center gap-2 text-xs text-white cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            value={t.id}
+                            {...register('teamIds')}
+                            className="w-4 h-4 rounded border-brand-border text-brand-blue bg-brand-bg focus:ring-0 focus:ring-offset-0 cursor-pointer"
+                          />
+                          <span>{t.name}</span>
+                        </label>
                       ))}
-                    </select>
+                    </div>
                   </div>
 
                   <div>
@@ -715,17 +739,21 @@ export default function Employees() {
                     />
                   </div>
 
-                  <div>
-                    <label className="block text-[10px] font-bold uppercase tracking-wider text-brand-text-soft mb-2">Team</label>
-                    <select
-                      {...registerEdit('teamId')}
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-brand-border bg-brand-bg text-xs text-white focus:outline-none cursor-pointer"
-                    >
-                      <option value="">None</option>
+                  <div className="col-span-2">
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-brand-text-soft mb-2">Projects / Teams Assigned</label>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-2.5 p-3.5 rounded-xl border border-brand-border bg-brand-bg">
                       {teams.map(t => (
-                        <option key={t.id} value={t.id}>{t.name}</option>
+                        <label key={t.id} className="flex items-center gap-2 text-xs text-white cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            value={t.id}
+                            {...registerEdit('teamIds')}
+                            className="w-4 h-4 rounded border-brand-border text-brand-blue bg-brand-bg focus:ring-0 focus:ring-offset-0 cursor-pointer"
+                          />
+                          <span>{t.name}</span>
+                        </label>
                       ))}
-                    </select>
+                    </div>
                   </div>
 
                   <div>
