@@ -44,7 +44,7 @@ export default function Dashboard() {
       try {
         setLoading(true);
         const empRes = await api.get('/employees');
-        const projRes = await api.get('/projects');
+        const projRes = await api.get('/campaigns');
         const runRes = await api.get('/payroll/runs');
         
         let presentToday = 0;
@@ -76,7 +76,7 @@ export default function Dashboard() {
 
         setStats({
           totalEmployees,
-          activeProjects,
+          activeProjects, // Let's keep activeProjects variable name inside stats so SDRDashboard/AdminDashboard doesn't break, but rename the label to Active Campaigns!
           presentToday: presentToday || Math.floor(totalEmployees * 0.9),
           lateToday,
           payrollHistoryData,

@@ -7,9 +7,9 @@ const MONTH_NAMES = [
   'July', 'August', 'September', 'October', 'November', 'December',
 ];
 
-function formatMoney(amount, currency) {
+function formatMoney(amount) {
   const n = Number(amount) || 0;
-  return `${currency || 'PKR'} ${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  return `PKR ${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 /**
@@ -51,7 +51,7 @@ function generatePayslipPdf(stream, payslip, company = { name: 'Brandigade', add
     ['Name', payslip.employee.fullName],
     ['Employee Code', payslip.employee.employeeCode],
     ['Designation', payslip.employee.designation || '-'],
-    ['Team', payslip.employee.team?.name || '-'],
+    ['Campaign', payslip.employee.campaignMembers?.[0]?.campaign?.name || '-'],
     ['Date of Joining', payslip.employee.dateOfJoining ? new Date(payslip.employee.dateOfJoining).toDateString() : '-'],
   ];
   doc.font('Helvetica').fontSize(10);
@@ -91,24 +91,24 @@ function generatePayslipPdf(stream, payslip, company = { name: 'Brandigade', add
 
   doc.font('Helvetica').fontSize(10);
   doc.fillColor(gray).text('Base Salary (pro-rated)', 50, y);
-  doc.fillColor(dark).text(formatMoney(payslip.baseSalary, payslip.employee.currency), 420, y);
+  doc.fillColor(dark).text(formatMoney(payslip.baseSalary), 420, y);
   y += 18;
 
   if (payslip.commission && payslip.commission > 0) {
     doc.fillColor(gray).text('Commission (Campaign Success)', 50, y);
-    doc.fillColor(dark).text(formatMoney(payslip.commission, payslip.employee.currency), 420, y);
+    doc.fillColor(dark).text(formatMoney(payslip.commission), 420, y);
     y += 18;
   }
 
   if (payslip.spiffs && payslip.spiffs > 0) {
     doc.fillColor(gray).text('Spiffs (Individual Incentives)', 50, y);
-    doc.fillColor(dark).text(formatMoney(payslip.spiffs, payslip.employee.currency), 420, y);
+    doc.fillColor(dark).text(formatMoney(payslip.spiffs), 420, y);
     y += 18;
   }
 
   if (payslip.bonus && payslip.bonus > 0) {
     doc.fillColor(gray).text('Bonus' + (payslip.bonusNotes ? ` (${payslip.bonusNotes})` : ''), 50, y, { width: 350 });
-    doc.fillColor(dark).text(formatMoney(payslip.bonus, payslip.employee.currency), 420, y);
+    doc.fillColor(dark).text(formatMoney(payslip.bonus), 420, y);
     y += 18;
   }
 
@@ -124,25 +124,25 @@ function generatePayslipPdf(stream, payslip, company = { name: 'Brandigade', add
 
   if (payslip.unpaidLeaveDeduction && payslip.unpaidLeaveDeduction > 0) {
     doc.fillColor(gray).text('Unpaid Leave Deduction', 50, y);
-    doc.fillColor(dark).text(formatMoney(payslip.unpaidLeaveDeduction, payslip.employee.currency), 420, y);
+    doc.fillColor(dark).text(formatMoney(payslip.unpaidLeaveDeduction), 420, y);
     y += 18;
     hasDeductions = true;
   }
   if (payslip.lateDeduction && payslip.lateDeduction > 0) {
     doc.fillColor(gray).text('Late Check-In Penalties', 50, y);
-    doc.fillColor(dark).text(formatMoney(payslip.lateDeduction, payslip.employee.currency), 420, y);
+    doc.fillColor(dark).text(formatMoney(payslip.lateDeduction), 420, y);
     y += 18;
     hasDeductions = true;
   }
   if (payslip.loansDeduction && payslip.loansDeduction > 0) {
     doc.fillColor(gray).text('Loan / Advance Installment', 50, y);
-    doc.fillColor(dark).text(formatMoney(payslip.loansDeduction, payslip.employee.currency), 420, y);
+    doc.fillColor(dark).text(formatMoney(payslip.loansDeduction), 420, y);
     y += 18;
     hasDeductions = true;
   }
   if (payslip.otherDeductions && payslip.otherDeductions > 0) {
     doc.fillColor(gray).text('Other Deductions' + (payslip.deductionNotes ? ` (${payslip.deductionNotes})` : ''), 50, y, { width: 350 });
-    doc.fillColor(dark).text(formatMoney(payslip.otherDeductions, payslip.employee.currency), 420, y);
+    doc.fillColor(dark).text(formatMoney(payslip.otherDeductions), 420, y);
     y += 18;
     hasDeductions = true;
   }
@@ -157,7 +157,7 @@ function generatePayslipPdf(stream, payslip, company = { name: 'Brandigade', add
   y += 16;
 
   doc.font('Helvetica-Bold').fontSize(13).fillColor(blue).text('Net Pay', 50, y);
-  doc.text(formatMoney(payslip.netPay, payslip.employee.currency), 420, y);
+  doc.text(formatMoney(payslip.netPay), 420, y);
 
   y += 50;
   doc.font('Helvetica').fontSize(8).fillColor(gray)

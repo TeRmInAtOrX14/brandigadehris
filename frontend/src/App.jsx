@@ -9,7 +9,7 @@ import Dashboard from './pages/Dashboard';
 import Employees from './pages/Employees';
 import Attendance from './pages/Attendance';
 import Requests from './pages/Requests';
-import Projects from './pages/Projects';
+import Campaigns from './pages/Campaigns';
 import Loans from './pages/Loans';
 import Payroll from './pages/Payroll';
 import Audit from './pages/Audit';
@@ -46,7 +46,7 @@ export default function App() {
             <Route path="employees" element={<Employees />} />
             <Route path="attendance" element={<Attendance />} />
             <Route path="requests" element={<Requests />} />
-            <Route path="projects" element={<Projects />} />
+            <Route path="campaigns" element={<Campaigns />} />
             <Route path="loans" element={<Loans />} />
             <Route path="payroll" element={<Payroll />} />
             <Route path="audit" element={<Audit />} />

@@ -3,6 +3,19 @@ const { logAudit } = require('../utils/audit');
 
 const prisma = new PrismaClient();
 
+async function getTeamLeadSdrIds(leadEmployeeId) {
+  const activeCampaigns = await prisma.campaignMember.findMany({
+    where: { employeeId: leadEmployeeId, role: 'team_lead', status: 'active' },
+    select: { campaignId: true }
+  });
+  const campaignIds = activeCampaigns.map(c => c.campaignId);
+  const members = await prisma.campaignMember.findMany({
+    where: { campaignId: { in: campaignIds }, status: 'active' },
+    select: { employeeId: true }
+  });
+  return members.map(m => m.employeeId);
+}
+
 // Helper to get dates between two dates
 function getDatesInRange(startDate, endDate) {
   const dates = [];
@@ -69,17 +82,14 @@ exports.getLeaveRequests = async (req, res, next) => {
     if (req.user.role === 'Employee') {
       where.employeeId = req.user.employee.id;
     } else if (req.user.role === 'Team Lead') {
+      const sdrIds = await getTeamLeadSdrIds(req.user.employee?.id);
       if (employeeId) {
-        const targetEmp = await prisma.employee.findUnique({
-          where: { id: employeeId },
-          select: { teamId: true }
-        });
-        if (!targetEmp || targetEmp.teamId !== req.user.employee?.teamId) {
+        if (!sdrIds.includes(employeeId)) {
           return res.status(403).json({ error: 'Access denied.' });
         }
         where.employeeId = employeeId;
       } else {
-        where.employee = { teamId: req.user.employee?.teamId };
+        where.employeeId = { in: sdrIds };
       }
     } else {
       if (employeeId) where.employeeId = employeeId;
@@ -105,6 +115,10 @@ exports.reviewLeaveRequest = async (req, res, next) => {
   try {
     const { id } = req.params;
     const { status } = req.body; // approved, rejected
+
+    if (req.user.role === 'Team Lead') {
+      return res.status(403).json({ error: 'Access denied: Team Leads do not have approval authority.' });
+    }
 
     if (!['approved', 'rejected'].includes(status)) {
       return res.status(400).json({ error: 'Invalid status. Must be approved or rejected.' });
@@ -220,17 +234,14 @@ exports.getHalfdayRequests = async (req, res, next) => {
     if (req.user.role === 'Employee') {
       where.employeeId = req.user.employee.id;
     } else if (req.user.role === 'Team Lead') {
+      const sdrIds = await getTeamLeadSdrIds(req.user.employee?.id);
       if (employeeId) {
-        const targetEmp = await prisma.employee.findUnique({
-          where: { id: employeeId },
-          select: { teamId: true }
-        });
-        if (!targetEmp || targetEmp.teamId !== req.user.employee?.teamId) {
+        if (!sdrIds.includes(employeeId)) {
           return res.status(403).json({ error: 'Access denied.' });
         }
         where.employeeId = employeeId;
       } else {
-        where.employee = { teamId: req.user.employee?.teamId };
+        where.employeeId = { in: sdrIds };
       }
     } else {
       if (employeeId) where.employeeId = employeeId;
@@ -256,6 +267,10 @@ exports.reviewHalfdayRequest = async (req, res, next) => {
   try {
     const { id } = req.params;
     const { status } = req.body;
+
+    if (req.user.role === 'Team Lead') {
+      return res.status(403).json({ error: 'Access denied: Team Leads do not have approval authority.' });
+    }
 
     if (!['approved', 'rejected'].includes(status)) {
       return res.status(400).json({ error: 'Invalid status' });
@@ -364,17 +379,14 @@ exports.getWfhRequests = async (req, res, next) => {
     if (req.user.role === 'Employee') {
       where.employeeId = req.user.employee.id;
     } else if (req.user.role === 'Team Lead') {
+      const sdrIds = await getTeamLeadSdrIds(req.user.employee?.id);
       if (employeeId) {
-        const targetEmp = await prisma.employee.findUnique({
-          where: { id: employeeId },
-          select: { teamId: true }
-        });
-        if (!targetEmp || targetEmp.teamId !== req.user.employee?.teamId) {
+        if (!sdrIds.includes(employeeId)) {
           return res.status(403).json({ error: 'Access denied.' });
         }
         where.employeeId = employeeId;
       } else {
-        where.employee = { teamId: req.user.employee?.teamId };
+        where.employeeId = { in: sdrIds };
       }
     } else {
       if (employeeId) where.employeeId = employeeId;
@@ -400,6 +412,10 @@ exports.reviewWfhRequest = async (req, res, next) => {
   try {
     const { id } = req.params;
     const { status } = req.body;
+
+    if (req.user.role === 'Team Lead') {
+      return res.status(403).json({ error: 'Access denied: Team Leads do not have approval authority.' });
+    }
 
     if (!['approved', 'rejected'].includes(status)) {
       return res.status(400).json({ error: 'Invalid status' });

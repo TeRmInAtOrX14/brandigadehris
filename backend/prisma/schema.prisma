@@ -39,11 +39,22 @@ model CompanyProfile {
   updatedAt DateTime @updatedAt
 }
 
-model Team {
-  id           String    @id @default(uuid())
-  name         String
-  employees    Employee[]
-  commissions  TeamCommission[]
+model Campaign {
+  id                  String               @id @default(uuid())
+  name                String               @unique
+  description         String?
+  status              String               @default("active") // active, inactive, archived
+  startDate           DateTime?
+  endDate             DateTime?
+  monthlyShowupTarget Int                  @default(0)
+  notes               String?
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+
+  // Relations
+  members             CampaignMember[]
+  commissionStructures CommissionStructure[]
+  performances        CampaignPerformance[]
 }
 
 model Employee {
@@ -54,8 +65,6 @@ model Employee {
   employeeCode     String    @unique
   fullName         String
   designation      String
-  teamId           String?
-  team             Team?       @relation(fields: [teamId], references: [id])
   managerId        String?
   manager          Employee?   @relation("EmployeeToManager", fields: [managerId], references: [id])
   subordinates     Employee[]  @relation("EmployeeToManager")
@@ -80,7 +89,8 @@ model Employee {
 
   // Relations
   salaryHistory    SalaryHistory[]
-  employeeProjects EmployeeProject[]
+  campaignMembers  CampaignMember[]
+  performances     CampaignPerformance[]
   spiffs           Spiff[]         @relation("EmployeeSpiff")
   attendance       Attendance[]
   leaveRequests    LeaveRequest[]
@@ -107,42 +117,61 @@ model SalaryHistory {
   createdAt     DateTime @default(now())
 }
 
-model Project {
-  id               String            @id @default(uuid())
-  name             String            @unique
-  description      String?
-  status           String            @default("active")
-  settings         Json?
-  employeeProjects EmployeeProject[]
-  commissions      Commission[]
-}
-
-model EmployeeProject {
+model CampaignMember {
   id         String   @id @default(uuid())
+  campaignId String
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
   employeeId String
-  employee   Employee @relation(fields: [employeeId], references: [id])
-  projectId  String
-  project    Project  @relation(fields: [projectId], references: [id])
-  role       String   // member, team_lead, sdr...
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  role       String   // team_lead, sdr
+  status     String   @default("active") // active, inactive
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
-  @@unique([employeeId, projectId])
+  @@unique([campaignId, employeeId])
 }
 
-model Commission {
-  id        String  @id @default(uuid())
-  projectId String
-  project   Project @relation(fields: [projectId], references: [id])
-  role      String
-  amount    Float
-
-  @@unique([projectId, role])
+model CommissionStructure {
+  id         String           @id @default(uuid())
+  campaignId String
+  campaign   Campaign         @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  name       String
+  status     String           @default("draft") // active, draft, archived
+  startDate  DateTime?
+  endDate    DateTime?
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+  slabs      CommissionSlab[]
 }
 
-model TeamCommission {
-  id     String @id @default(uuid())
-  teamId String
-  team   Team   @relation(fields: [teamId], references: [id])
-  amount Float
+model CommissionSlab {
+  id          String              @id @default(uuid())
+  structureId String
+  structure   CommissionStructure @relation(fields: [structureId], references: [id], onDelete: Cascade)
+  minShowups  Int
+  maxShowups  Int?                // Null represents infinity (e.g. 31+)
+  rate        Float
+  type        String              @default("per_showup") // per_showup, fixed_monthly, percentage, hybrid
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+}
+
+model CampaignPerformance {
+  id                String   @id @default(uuid())
+  employeeId        String
+  employee          Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  campaignId        String
+  campaign          Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  month             Int      // 1-12
+  year              Int      // e.g. 2026
+  meetingsBooked    Int      @default(0)
+  showups           Int      @default(0)
+  noShows           Int      @default(0)
+  cancelledMeetings Int      @default(0)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@unique([employeeId, campaignId, month, year])
 }
 
 model Spiff {

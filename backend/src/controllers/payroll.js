@@ -56,7 +56,10 @@ exports.runPayroll = async (req, res, next) => {
     const employees = await prisma.employee.findMany({
       where: { status: 'active' },
       include: {
-        team: true,
+        campaignMembers: {
+          where: { status: 'active' },
+          include: { campaign: true }
+        },
         user: true
       }
     });
@@ -67,18 +70,20 @@ exports.runPayroll = async (req, res, next) => {
       // 1. Base Salary
       const baseSalary = emp.baseSalary;
 
-      // 2. Performance data from payload
-      const perf = performance.find(p => p.employeeId === emp.id) || {
-        showups: 0,
-        meetingsScheduled: 0,
-        noShows: 0,
-        bonus: 0,
-        bonusNotes: '',
-        otherDeductions: 0,
-        deductionNotes: ''
-      };
+      // Find performance record for this employee from database or payload
+      const dbPerf = await prisma.campaignPerformance.findFirst({
+        where: { employeeId: emp.id, month: parseInt(month), year: parseInt(year) }
+      });
 
-      // 3. Attendance metrics (present, late count)
+      const payloadPerf = performance.find(p => p.employeeId === emp.id);
+
+      const showupsCount = payloadPerf ? (payloadPerf.showups || 0) : (dbPerf ? dbPerf.showups : 0);
+      const meetingsScheduledCount = payloadPerf ? (payloadPerf.meetingsScheduled || 0) : (dbPerf ? dbPerf.meetingsBooked : 0);
+      const noShowsCount = payloadPerf ? (payloadPerf.noShows || 0) : (dbPerf ? dbPerf.noShows : 0);
+      const bonusAmount = payloadPerf ? (payloadPerf.bonus || 0) : 0;
+      const otherDeductionsAmount = payloadPerf ? (payloadPerf.otherDeductions || 0) : 0;
+
+      // 2. Attendance metrics (present, late count)
       const attendanceRecords = await prisma.attendance.findMany({
         where: {
           employeeId: emp.id,
@@ -100,7 +105,7 @@ exports.runPayroll = async (req, res, next) => {
         }
       });
 
-      // 4. Unpaid leaves deduction
+      // 3. Unpaid leaves deduction
       const unpaidLeaves = await prisma.leaveRequest.aggregate({
         _sum: { days: true },
         where: {
@@ -114,10 +119,10 @@ exports.runPayroll = async (req, res, next) => {
       const unpaidDays = unpaidLeaves._sum.days || 0;
       const unpaidLeaveDeduction = (baseSalary / daysInPeriod) * unpaidDays;
 
-      // 5. Late deduction (3 lates = 1 day salary deduction)
+      // 4. Late deduction (3 lates = 1 day salary deduction)
       const lateDeduction = Math.floor(lateCount / 3) * (baseSalary / daysInPeriod);
 
-      // 6. Loans deduction for this month/year
+      // 5. Loans deduction for this month/year
       const loans = await prisma.loanRequest.aggregate({
         _sum: { amount: true },
         where: {
@@ -129,7 +134,7 @@ exports.runPayroll = async (req, res, next) => {
       });
       const loansDeduction = loans._sum.amount || 0;
 
-      // 7. Spiffs for this month/year
+      // 6. Spiffs for this month/year
       const spiffsSum = await prisma.spiff.aggregate({
         _sum: { amount: true },
         where: {
@@ -139,109 +144,85 @@ exports.runPayroll = async (req, res, next) => {
       });
       const spiffs = spiffsSum._sum.amount || 0;
 
-      // 8. Campaign Commissions
+      // 7. Campaign Commissions (Dynamic Commission Engine)
       let commission = 0;
 
-      // Look up campaigns assigned to this employee
-      const assignedProjects = await prisma.employeeProject.findMany({
-        where: { employeeId: emp.id }
-      });
+      const activeMembership = emp.campaignMembers[0];
+      if (activeMembership) {
+        const campaignId = activeMembership.campaignId;
+        const role = activeMembership.role;
 
-      for (const ap of assignedProjects) {
-        // Fetch project to check slab settings
-        const project = await prisma.project.findUnique({
-          where: { id: ap.projectId }
+        // Fetch active structure
+        const activeStructure = await prisma.commissionStructure.findFirst({
+          where: { campaignId, status: 'active' },
+          include: { slabs: true }
         });
-        const settings = project?.settings || {};
 
-        // SDR role calculation (Showup Slabs)
-        if (ap.role === 'sdr') {
-          const sdrSlabs = settings.sdrSlabs || [];
-          let sdrRate = null;
-
-          if (sdrSlabs.length > 0) {
-            // Find matching slab range (min <= showups <= max)
-            const matchingSlab = sdrSlabs.find(slab => 
-              perf.showups >= parseInt(slab.min) && 
-              perf.showups <= parseInt(slab.max)
+        if (activeStructure && activeStructure.slabs.length > 0) {
+          // SDR calculation (Showup Slabs)
+          if (role === 'sdr') {
+            const matchedSlab = activeStructure.slabs.find(slab => 
+              showupsCount >= slab.minShowups && 
+              (slab.maxShowups === null || showupsCount <= slab.maxShowups)
             );
-            if (matchingSlab) {
-              sdrRate = parseFloat(matchingSlab.rate);
+            if (matchedSlab) {
+              if (matchedSlab.type === 'per_showup') {
+                commission = showupsCount * matchedSlab.rate;
+              } else if (matchedSlab.type === 'fixed_monthly') {
+                commission = matchedSlab.rate;
+              } else if (matchedSlab.type === 'percentage') {
+                commission = matchedSlab.rate * showupsCount;
+              } else if (matchedSlab.type === 'hybrid') {
+                commission = matchedSlab.rate + (showupsCount * 2000);
+              }
             }
           }
+          // Team Lead calculation (Team Average Slabs override)
+          else if (role === 'team_lead') {
+            // Find all active SDRs in this campaign
+            const teamSdrs = await prisma.campaignMember.findMany({
+              where: { campaignId, role: 'sdr', status: 'active' }
+            });
+            const teamSdrIds = teamSdrs.map(s => s.employeeId);
 
-          if (sdrRate !== null) {
-            commission += perf.showups * sdrRate;
-          } else {
-            // Fallback to flat rate
-            const flatRate = await prisma.commission.findUnique({
+            // Fetch team members' performance
+            const teamPerfs = await prisma.campaignPerformance.findMany({
               where: {
-                projectId_role: { projectId: ap.projectId, role: 'sdr' }
+                employeeId: { in: teamSdrIds },
+                campaignId,
+                month: parseInt(month),
+                year: parseInt(year)
               }
             });
-            if (flatRate) {
-              commission += perf.showups * flatRate.amount;
-            }
-          }
-        }
-        // Team Lead role calculation (Calculates average showups per assigned team member)
-        else if (ap.role === 'team_lead') {
-          // Find all team members in this project (SDRs) who share the same teamId
-          const teamSdrMembers = await prisma.employee.findMany({
-            where: {
-              teamId: emp.teamId,
-              status: 'active',
-              id: { not: emp.id }, // Exclude Team Lead themselves if also on project
-              employeeProjects: {
-                some: { projectId: ap.projectId, role: 'sdr' }
-              }
-            },
-            select: { id: true }
-          });
-          const teamSdrIds = teamSdrMembers.map(s => s.id);
-          const teamSize = teamSdrIds.length;
 
-          // Sum up total showups of team members from performance payload
-          const teamShowups = performance
-            .filter(p => teamSdrIds.includes(p.employeeId))
-            .reduce((sum, p) => sum + (parseInt(p.showups) || 0), 0);
+            const teamShowups = teamPerfs.reduce((sum, p) => sum + p.showups, 0);
+            const teamSize = teamSdrs.length;
 
-          if (teamSize > 0) {
-            const avgShowups = teamShowups / teamSize;
-            const teamSlabs = settings.teamSlabs || [];
-            let teamRate = null;
-
-            if (teamSlabs.length > 0) {
-              // Find matching slab range (minAvg <= avgShowups <= maxAvg)
-              const matchingSlab = teamSlabs.find(slab => 
-                avgShowups >= parseFloat(slab.minAvg) && 
-                avgShowups <= parseFloat(slab.maxAvg)
+            if (teamSize > 0) {
+              const avgShowups = teamShowups / teamSize;
+              const matchedSlab = activeStructure.slabs.find(slab => 
+                avgShowups >= slab.minShowups && 
+                (slab.maxShowups === null || avgShowups <= slab.maxShowups)
               );
-              if (matchingSlab) {
-                teamRate = parseFloat(matchingSlab.rate);
-              }
-            }
-
-            if (teamRate !== null) {
-              commission += teamShowups * teamRate;
-            } else {
-              // Fallback to flat team lead override rate
-              const flatRate = await prisma.commission.findUnique({
-                where: {
-                  projectId_role: { projectId: ap.projectId, role: 'team_lead' }
+              if (matchedSlab) {
+                if (matchedSlab.type === 'per_showup') {
+                  commission = teamShowups * matchedSlab.rate;
+                } else if (matchedSlab.type === 'fixed_monthly') {
+                  commission = matchedSlab.rate;
+                } else if (matchedSlab.type === 'percentage') {
+                  commission = matchedSlab.rate * teamShowups;
+                } else if (matchedSlab.type === 'hybrid') {
+                  commission = matchedSlab.rate + (teamShowups * 2000);
                 }
-              });
-              if (flatRate) {
-                commission += teamShowups * flatRate.amount;
               }
             }
           }
         }
       }
 
-      // 9. Final Calculation
-      const earnings = baseSalary + (perf.bonus || 0) + commission + spiffs;
-      const deductions = unpaidLeaveDeduction + lateDeduction + loansDeduction + (perf.otherDeductions || 0);
+      // 8. Final Calculation
+      const earnings = baseSalary + bonusAmount + commission + spiffs;
+      const deductions = unpaidLeaveDeduction + lateDeduction + loansDeduction + otherDeductionsAmount;
       const netPay = Math.max(0, earnings - deductions);
 
       // Create Payslip entry in DB
@@ -255,18 +236,23 @@ exports.runPayroll = async (req, res, next) => {
           unpaidLeaveDeduction,
           lateDeduction,
           loansDeduction,
-          otherDeductions: perf.otherDeductions || 0,
-          bonus: perf.bonus || 0,
+          otherDeductions: otherDeductionsAmount,
+          bonus: bonusAmount,
           commission,
           spiffs,
           netPay,
-          showups: perf.showups || 0,
-          meetingsScheduled: perf.meetingsScheduled || 0,
-          noShows: perf.noShows || 0
+          showups: showupsCount,
+          meetingsScheduled: meetingsScheduledCount,
+          noShows: noShowsCount
         },
         include: {
           employee: {
-            include: { team: true }
+            include: {
+              campaignMembers: {
+                where: { status: 'active' },
+                include: { campaign: true }
+              }
+            }
           }
         }
       });
@@ -296,7 +282,14 @@ exports.finalizePayroll = async (req, res, next) => {
       include: {
         payslips: {
           include: {
-            employee: { include: { team: true } }
+            employee: {
+              include: {
+                campaignMembers: {
+                  where: { status: 'active' },
+                  include: { campaign: true }
+                }
+              }
+            }
           }
         }
       }
@@ -457,9 +450,14 @@ exports.getPayslipPdfFile = async (req, res, next) => {
     const payslip = await prisma.payslip.findUnique({
       where: { id },
       include: {
-        employee: {
-          include: { team: true }
-        },
+          employee: {
+            include: {
+              campaignMembers: {
+                where: { status: 'active' },
+                include: { campaign: true }
+              }
+            }
+          },
         payrollRun: true
       }
     });

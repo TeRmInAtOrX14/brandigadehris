@@ -5,50 +5,19 @@ const { logAudit } = require('../utils/audit');
 const prisma = new PrismaClient();
 
 // ==============================================================================
-// Teams
-// ==============================================================================
-
-exports.getTeams = async (req, res, next) => {
-  try {
-    const teams = await prisma.team.findMany({
-      include: {
-        _count: { select: { employees: true } }
-      }
-    });
-    res.json(teams);
-  } catch (err) {
-    next(err);
-  }
-};
-
-exports.createTeam = async (req, res, next) => {
-  try {
-    const { name } = req.body;
-    if (!name) {
-      return res.status(400).json({ error: 'Team name is required' });
-    }
-
-    const team = await prisma.team.create({
-      data: { name }
-    });
-
-    await logAudit(req.user.id, 'CREATE_TEAM', 'Team', team.id, { name });
-    res.status(201).json(team);
-  } catch (err) {
-    next(err);
-  }
-};
-
-// ==============================================================================
 // Employees
 // ==============================================================================
 
 exports.getEmployees = async (req, res, next) => {
   try {
-    const { teamId, status, search } = req.query;
+    const { campaignId, status, search } = req.query;
 
     const where = {};
-    if (teamId) where.teamId = teamId;
+    if (campaignId) {
+      where.campaignMembers = {
+        some: { campaignId, status: 'active' }
+      };
+    }
     if (status) where.status = status;
     if (search) {
       where.OR = [
@@ -58,9 +27,16 @@ exports.getEmployees = async (req, res, next) => {
       ];
     }
 
-    // Role restriction: Team Lead can only see their team employees (or restrict accordingly)
-    if (req.user.role === 'Team Lead' && req.user.employee?.teamId) {
-      where.teamId = req.user.employee.teamId;
+    // Role restriction: Team Lead can only see employees in campaigns they actively lead
+    if (req.user.role === 'Team Lead' && req.user.employee?.id) {
+      const ledCampaigns = await prisma.campaignMember.findMany({
+        where: { employeeId: req.user.employee.id, role: 'team_lead', status: 'active' },
+        select: { campaignId: true }
+      });
+      const campaignIds = ledCampaigns.map(c => c.campaignId);
+      where.campaignMembers = {
+        some: { campaignId: { in: campaignIds }, status: 'active' }
+      };
     }
 
     const employees = await prisma.employee.findMany({
@@ -69,7 +45,10 @@ exports.getEmployees = async (req, res, next) => {
         user: {
           select: { email: true, role: true, isActive: true }
         },
-        team: true,
+        campaignMembers: {
+          where: { status: 'active' },
+          include: { campaign: true }
+        },
         manager: {
           select: { id: true, fullName: true, designation: true }
         }
@@ -98,12 +77,12 @@ exports.getEmployeeById = async (req, res, next) => {
         user: {
           select: { email: true, role: true, isActive: true }
         },
-        team: true,
+        campaignMembers: {
+          where: { status: 'active' },
+          include: { campaign: true }
+        },
         manager: {
           select: { id: true, fullName: true, designation: true }
-        },
-        employeeProjects: {
-          include: { project: true }
         },
         salaryHistory: {
           orderBy: { createdAt: 'desc' }
@@ -130,7 +109,6 @@ exports.createEmployee = async (req, res, next) => {
       employeeCode,
       fullName,
       designation,
-      teamId,
       managerId,
       dateOfJoining,
       baseSalary,
@@ -178,7 +156,6 @@ exports.createEmployee = async (req, res, next) => {
           employeeCode,
           fullName,
           designation,
-          teamId: teamId || null,
           managerId: managerId || null,
           dateOfJoining: new Date(dateOfJoining),
           baseSalary: parseFloat(baseSalary) || 0,
@@ -284,7 +261,6 @@ exports.updateEmployee = async (req, res, next) => {
         data: {
           fullName: updates.fullName,
           designation: updates.designation,
-          teamId: updates.teamId,
           managerId: updates.managerId,
           dateOfJoining: updates.dateOfJoining ? new Date(updates.dateOfJoining) : undefined,
           baseSalary: updates.baseSalary ? parseFloat(updates.baseSalary) : undefined,

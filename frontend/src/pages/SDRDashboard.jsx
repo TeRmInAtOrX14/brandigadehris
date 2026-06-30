@@ -34,10 +34,10 @@ export default function SDRDashboard({ stats }) {
           </div>
           <p className="text-3xl font-extrabold text-white font-display">{stats?.lateToday}</p>
         </div>
-        {/* Active Projects */}
+        {/* Active Campaigns */}
         <div className="p-6 rounded-2xl glass-panel card-hover text-left">
           <div className="flex items-center justify-between mb-4">
-            <span className="text-[10px] font-bold text-brand-text-soft uppercase tracking-widest">Active Projects</span>
+            <span className="text-[10px] font-bold text-brand-text-soft uppercase tracking-widest">Active Campaigns</span>
             <Calendar className="w-5 h-5 text-brand-cyan" />
           </div>
           <p className="text-3xl font-extrabold text-white font-display">{stats?.activeProjects}</p>
