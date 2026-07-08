@@ -13,6 +13,7 @@ import Campaigns from './pages/Campaigns';
 import Loans from './pages/Loans';
 import Payroll from './pages/Payroll';
 import Audit from './pages/Audit';
+import DigitalTwin from './pages/DigitalTwin';
 
 const queryClient = new QueryClient();
 
@@ -50,6 +51,7 @@ export default function App() {
             <Route path="loans" element={<Loans />} />
             <Route path="payroll" element={<Payroll />} />
             <Route path="audit" element={<Audit />} />
+            <Route path="digital-twin" element={<DigitalTwin />} />
           </Route>
 
           {/* Fallback Catch-all Redirect */}
