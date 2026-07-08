@@ -102,7 +102,6 @@ async function main() {
               fullName: cleanName,
               designation: role === 'Admin' ? 'Administrator' : 'Software Engineer',
               zkUserId: devUserId,
-              dateOfJoining: new Date(),
               status: 'active',
               baseSalary: 50000
             }

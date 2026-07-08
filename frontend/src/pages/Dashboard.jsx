@@ -44,15 +44,10 @@ export default function Dashboard() {
       try {
         setLoading(true);
         const empRes = await api.get('/employees');
-        const projRes = await api.get('/campaigns');
-        const runRes = await api.get('/payroll/runs');
+        let totalEmployees = empRes.data.length;
         
         let presentToday = 0;
         let lateToday = 0;
-        const totalEmployees = empRes.data.length;
-        const activeProjects = projRes.data.filter(p => p.status === 'active').length;
-
-        // Fetch today's attendance
         const todayStr = new Date().toISOString().split('T')[0];
         const attRes = await api.get(`/attendance?startDate=${todayStr}&endDate=${todayStr}`);
         attRes.data.forEach(r => {
@@ -60,34 +55,55 @@ export default function Dashboard() {
           if (r.late > 0) lateToday++;
         });
 
-        // Compile payroll data for Recharts
-        const payrollHistoryData = runRes.data.map(run => ({
-          name: `${run.periodMonth}/${run.periodYear}`,
-          expense: run.status === 'finalized' ? 450000 : 0
-        })).slice(0, 6).reverse();
+        if (isAdmin) {
+          const projRes = await api.get('/campaigns');
+          const runRes = await api.get('/payroll/runs');
+          const activeProjects = projRes.data.filter(p => p.status === 'active').length;
+          
+          const payrollHistoryData = runRes.data.map(run => ({
+            name: `${run.periodMonth}/${run.periodYear}`,
+            expense: run.status === 'finalized' ? 450000 : 0
+          })).slice(0, 6).reverse();
 
-        if (payrollHistoryData.length === 0) {
-          payrollHistoryData.push(
-            { name: '1/2026', expense: 195000 },
-            { name: '2/2026', expense: 280000 },
-            { name: '3/2026', expense: 280000 }
-          );
+          if (payrollHistoryData.length === 0) {
+            payrollHistoryData.push(
+              { name: '1/2026', expense: 195000 },
+              { name: '2/2026', expense: 280000 },
+              { name: '3/2026', expense: 280000 }
+            );
+          }
+
+          setStats({
+            totalEmployees,
+            activeProjects,
+            presentToday,
+            lateToday,
+            payrollHistoryData,
+            attendanceChartData: [
+              { name: 'Mon', Present: 8, Late: 1, WFH: 1 },
+              { name: 'Tue', Present: 9, Late: 0, WFH: 1 },
+              { name: 'Wed', Present: 7, Late: 2, WFH: 2 },
+              { name: 'Thu', Present: 8, Late: 1, WFH: 1 },
+              { name: 'Fri', Present: 9, Late: 0, WFH: 1 }
+            ]
+          });
+        } else if (isTeamLead) {
+          const projRes = await api.get('/campaigns');
+          const activeProjects = projRes.data.filter(p => p.status === 'active').length;
+          setStats({
+            totalEmployees,
+            activeProjects,
+            presentToday,
+            lateToday
+          });
+        } else {
+          setStats({
+            totalEmployees: 1,
+            activeProjects: 1,
+            presentToday: presentToday ? 1 : 0,
+            lateToday: lateToday ? 1 : 0
+          });
         }
-
-        setStats({
-          totalEmployees,
-          activeProjects, // Let's keep activeProjects variable name inside stats so SDRDashboard/AdminDashboard doesn't break, but rename the label to Active Campaigns!
-          presentToday: presentToday || Math.floor(totalEmployees * 0.9),
-          lateToday,
-          payrollHistoryData,
-          attendanceChartData: [
-            { name: 'Mon', Present: 8, Late: 1, WFH: 1 },
-            { name: 'Tue', Present: 9, Late: 0, WFH: 1 },
-            { name: 'Wed', Present: 7, Late: 2, WFH: 2 },
-            { name: 'Thu', Present: 8, Late: 1, WFH: 1 },
-            { name: 'Fri', Present: 9, Late: 0, WFH: 1 }
-          ]
-        });
       } catch (err) {
         toast.error('Failed to load dashboard metrics');
       } finally {
@@ -96,7 +112,7 @@ export default function Dashboard() {
     };
 
     fetchDashboardStats();
-  }, [isAdmin]);
+  }, [isAdmin, isTeamLead]);
 
   if (loading) {
     return (

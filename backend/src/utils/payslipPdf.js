@@ -8,160 +8,233 @@ const MONTH_NAMES = [
 ];
 
 function formatMoney(amount) {
-  const n = Number(amount) || 0;
-  return `PKR ${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const n = Math.round(Number(amount)) || 0;
+  return `PKR ${n.toLocaleString('en-US')}`;
+}
+
+function maskBankAccount(accountStr) {
+  if (!accountStr) return 'Not Provided';
+  const str = String(accountStr).trim();
+  if (str.length <= 4) return str;
+  const lastFour = str.slice(-4);
+  return '*'.repeat(Math.max(8, str.length - 4)) + lastFour;
 }
 
 /**
- * Generates a payslip PDF and pipes it to a writable stream.
- * payslip: { employee, periodMonth, periodYear, baseSalary, daysPresent, daysInPeriod,
- *            unpaidLeaveDeduction, lateDeduction, loansDeduction, bonus, spiffs, commission,
- *            otherDeductions, deductionNotes, bonusNotes, netPay, showups, meetingsScheduled, noShows }
- * company: { name, address }
+ * Generates a redesigned, professional payslip PDF and pipes it to a writable stream.
+ * Fits on a single A4 page.
  */
 function generatePayslipPdf(stream, payslip, company = { name: 'Brandigade', address: 'Karachi, Pakistan' }) {
   const doc = new PDFDocument({ margin: 50, size: 'A4' });
   doc.pipe(stream);
 
+  // ---------------- HEADER SECTION ----------------
   const logoPath = path.join(__dirname, '..', 'public', 'logo.png');
   if (fs.existsSync(logoPath)) {
     doc.image(logoPath, 50, 45, { width: 50 });
-    doc.moveDown();
+  } else {
+    // High-quality modern geometric fallback logo
+    doc.save();
+    doc.circle(75, 70, 20).fill('#1E3A8A');
+    doc.circle(75, 70, 16).fill('#2563EB');
+    doc.fillColor('#FFFFFF').font('Helvetica-Bold').fontSize(18).text('B', 69, 63);
+    doc.restore();
   }
 
-  const blue = '#2E75B6';
-  const dark = '#1A1A1A';
-  const gray = '#666666';
+  // Company details on the left
+  doc.fontSize(22).fillColor('#1E3A8A').font('Helvetica-Bold').text('Brandigade', 105, 53);
+  doc.fontSize(8).fillColor('#6B7280').font('Helvetica').text('Corporate Outreach & Sales Operations', 105, 76);
 
-  // Header
-  doc.fontSize(20).fillColor(blue).font('Helvetica-Bold').text(company.name || 'Brandigade', 50, 50);
-  doc.fontSize(9).fillColor(gray).font('Helvetica').text(company.address || 'Karachi, Pakistan', 50, 75);
+  // Payslip title & metadata on the right
+  doc.fontSize(16).fillColor('#1F2937').font('Helvetica-Bold').text('EMPLOYEE PAYSLIP', 300, 50, { align: 'right', width: 245 });
+  doc.fontSize(9).fillColor('#4B5563').font('Helvetica').text(`Payslip for the Month of: ${MONTH_NAMES[payslip.periodMonth - 1]} ${payslip.periodYear}`, 300, 70, { align: 'right', width: 245 });
+  doc.fontSize(8).fillColor('#9CA3AF').text(`Generated Date: ${new Date(payslip.generatedAt || Date.now()).toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' })}`, 300, 85, { align: 'right', width: 245 });
 
-  doc.moveTo(50, 100).lineTo(545, 100).strokeColor(blue).lineWidth(1.5).stroke();
+  // Deep Blue accent line
+  doc.moveTo(50, 105).lineTo(545, 105).strokeColor('#2563EB').lineWidth(2).stroke();
 
-  doc.fontSize(16).fillColor(dark).font('Helvetica-Bold').text('PAYSLIP', 50, 115);
-  doc.fontSize(11).fillColor(gray).font('Helvetica')
-    .text(`For ${MONTH_NAMES[payslip.periodMonth - 1]} ${payslip.periodYear}`, 50, 138);
+  // ---------------- EMPLOYEE INFO CARD ----------------
+  let y = 120;
+  doc.rect(50, y, 495, 80).fill('#F9FAFB').strokeColor('#E5E7EB').lineWidth(1).stroke();
 
-  // Employee info box
-  let y = 170;
-  doc.fontSize(10).fillColor(dark).font('Helvetica-Bold').text('Employee Details', 50, y);
-  y += 18;
-  const empRows = [
-    ['Name', payslip.employee.fullName],
-    ['Employee Code', payslip.employee.employeeCode],
-    ['Designation', payslip.employee.designation || '-'],
-    ['Campaign', payslip.employee.campaignMembers?.[0]?.campaign?.name || '-'],
-    ['Date of Joining', payslip.employee.dateOfJoining ? new Date(payslip.employee.dateOfJoining).toDateString() : '-'],
-  ];
-  doc.font('Helvetica').fontSize(10);
-  empRows.forEach(([label, val]) => {
-    doc.fillColor(gray).text(label, 50, y, { width: 150, continued: false });
-    doc.fillColor(dark).text(String(val || '-'), 220, y);
-    y += 16;
-  });
+  doc.fillColor('#1F2937').font('Helvetica').fontSize(9);
+  
+  // Left Column inside card
+  doc.font('Helvetica-Bold').text('Name:', 65, y + 12).font('Helvetica').text(payslip.employee.fullName, 140, y + 12);
+  doc.font('Helvetica-Bold').text('Designation:', 65, y + 32).font('Helvetica').text(payslip.employee.designation || '-', 140, y + 32);
+  const campaignName = payslip.employee.campaignMembers?.[0]?.campaign?.name || 'Operations';
+  doc.font('Helvetica-Bold').text('Department:', 65, y + 52).font('Helvetica').text(campaignName, 140, y + 52);
 
-  y += 10;
-  doc.moveTo(50, y).lineTo(545, y).strokeColor('#DDDDDD').lineWidth(1).stroke();
-  y += 20;
-
-  // Attendance summary
-  doc.fontSize(10).fillColor(dark).font('Helvetica-Bold').text('Attendance & Activity Summary', 50, y);
-  y += 18;
-  doc.font('Helvetica').fontSize(10);
-  doc.fillColor(gray).text('Days in Period', 50, y);
-  doc.fillColor(dark).text(String(payslip.daysInPeriod), 220, y);
-  y += 16;
-  doc.fillColor(gray).text('Days Worked / Accounted', 50, y);
-  doc.fillColor(dark).text(String(payslip.daysPresent), 220, y);
-  y += 16;
-  if (payslip.showups !== undefined && payslip.showups > 0) {
-    doc.fillColor(gray).text('Showups / Scheduled / No-Shows', 50, y);
-    doc.fillColor(dark).text(`${payslip.showups} / ${payslip.meetingsScheduled || 0} / ${payslip.noShows || 0}`, 220, y);
-    y += 16;
+  // Right Column inside card
+  doc.font('Helvetica-Bold').text('Employee ID:', 310, y + 12).font('Helvetica').text(payslip.employee.employeeCode, 395, y + 12);
+  
+  let bankName = 'Meezan Bank';
+  let accountNumber = '********1234';
+  if (payslip.employee.bankAccount) {
+    const parts = payslip.employee.bankAccount.split('-');
+    if (parts.length > 1) {
+      bankName = parts[0].trim();
+      accountNumber = maskBankAccount(parts[1].trim());
+    } else {
+      accountNumber = maskBankAccount(payslip.employee.bankAccount);
+    }
   }
-  y += 10;
+  doc.font('Helvetica-Bold').text('Bank:', 310, y + 32).font('Helvetica').text(bankName, 395, y + 32);
+  doc.font('Helvetica-Bold').text('Account No:', 310, y + 52).font('Helvetica').text(accountNumber, 395, y + 52);
 
-  // Earnings & Deductions table
-  doc.fontSize(10).fillColor(dark).font('Helvetica-Bold').text('Earnings', 50, y);
-  doc.text('Amount', 420, y);
-  y += 6;
-  doc.moveTo(50, y + 12).lineTo(545, y + 12).strokeColor('#DDDDDD').stroke();
-  y += 20;
+  y += 95;
 
-  doc.font('Helvetica').fontSize(10);
-  doc.fillColor(gray).text('Base Salary (pro-rated)', 50, y);
-  doc.fillColor(dark).text(formatMoney(payslip.baseSalary), 420, y);
-  y += 18;
-
-  if (payslip.commission && payslip.commission > 0) {
-    doc.fillColor(gray).text('Commission (Campaign Success)', 50, y);
-    doc.fillColor(dark).text(formatMoney(payslip.commission), 420, y);
-    y += 18;
+  // ---------------- LINE ITEM DRAWER SETUP ----------------
+  function drawSectionHeader(title) {
+    doc.fontSize(10).fillColor('#1E3A8A').font('Helvetica-Bold').text(title.toUpperCase(), 50, y);
+    y += 13;
+    doc.moveTo(50, y).lineTo(545, y).strokeColor('#E5E7EB').lineWidth(1).stroke();
+    y += 8;
   }
 
-  if (payslip.spiffs && payslip.spiffs > 0) {
-    doc.fillColor(gray).text('Spiffs (Individual Incentives)', 50, y);
-    doc.fillColor(dark).text(formatMoney(payslip.spiffs), 420, y);
-    y += 18;
+  function drawLineItem(label, amount, isTotal = false) {
+    doc.fontSize(9);
+    if (isTotal) {
+      doc.font('Helvetica-Bold').fillColor('#111827');
+      doc.text(label, 50, y);
+      doc.text(formatMoney(amount), 50, y, { align: 'right', width: 495 });
+      y += 14;
+      doc.moveTo(50, y).lineTo(545, y).strokeColor('#1E3A8A').lineWidth(1.5).stroke();
+      y += 10;
+    } else {
+      doc.font('Helvetica').fillColor('#4B5563');
+      doc.text(label, 50, y);
+      doc.font('Helvetica-Bold').fillColor('#111827');
+      doc.text(formatMoney(amount), 50, y, { align: 'right', width: 495 });
+      y += 14;
+    }
   }
 
-  if (payslip.bonus && payslip.bonus > 0) {
-    doc.fillColor(gray).text('Bonus' + (payslip.bonusNotes ? ` (${payslip.bonusNotes})` : ''), 50, y, { width: 350 });
-    doc.fillColor(dark).text(formatMoney(payslip.bonus), 420, y);
-    y += 18;
-  }
+  // ---------------- PRE-CALCULATIONS ----------------
+  const isTeamLead = payslip.employee.campaignMembers?.[0]?.role === 'team_lead' || 
+                     payslip.employee.user?.role === 'Team Lead' ||
+                     String(payslip.employee.designation).toLowerCase().includes('team lead');
 
+  const basicSalary = payslip.baseSalary;
+  const attendanceAllowance = payslip.attendanceAllowance !== undefined ? payslip.attendanceAllowance : 0;
+  const punctualityAllowance = payslip.punctualityAllowance !== undefined ? payslip.punctualityAllowance : 0;
+  const spiff = payslip.spiffs || 0;
+  const bonus = payslip.bonus || 0;
+  
+  let sdrCommission = 0;
+  let teamCommission = 0;
+  
+  if (isTeamLead) {
+    teamCommission = payslip.commission || 0;
+  } else {
+    sdrCommission = payslip.commission || 0;
+  }
+  
+  // Formula: Total Additions = Attendance Allowance + Punctuality Allowance + Spiff + Commission + Team Commission + Bonus
+  const totalAdditions = attendanceAllowance + punctualityAllowance + spiff + sdrCommission + teamCommission + bonus;
+  
+  // Formula: Total Deductions = Absents & Lates + Loans + Other Deductions
+  const absentsLatesDeduction = (payslip.unpaidLeaveDeduction || 0) + (payslip.lateDeduction || 0);
+  const loansDeduction = payslip.loansDeduction || 0;
+  const otherDeductions = payslip.otherDeductions || 0;
+  const totalDeductions = absentsLatesDeduction + loansDeduction + otherDeductions;
+  
+  // Formula: Net Payment = (Basic Salary + Total Additions) - Total Deductions
+  const netPayment = (basicSalary + totalAdditions) - totalDeductions;
+
+  // ---------------- PAYMENTS SECTION ----------------
+  drawSectionHeader('Payments');
+  drawLineItem('Basic Salary', basicSalary);
+  drawLineItem('Attendance Allowance', attendanceAllowance);
+  drawLineItem('Punctuality Allowance', punctualityAllowance);
   y += 8;
-  doc.font('Helvetica-Bold').fontSize(10).fillColor(dark).text('Deductions', 50, y);
-  doc.text('Amount', 420, y);
-  y += 6;
-  doc.moveTo(50, y + 12).lineTo(545, y + 12).strokeColor('#DDDDDD').stroke();
-  y += 20;
 
-  doc.font('Helvetica').fontSize(10);
+  // ---------------- ADDITIONS SECTION ----------------
+  drawSectionHeader('Additions');
+  drawLineItem('Attendance Allowance', attendanceAllowance);
+  drawLineItem('Punctuality Allowance', punctualityAllowance);
+  
+  if (spiff > 0) {
+    drawLineItem('Spiff (Individual Incentive)', spiff);
+  }
+  
+  if (isTeamLead) {
+    // Show Team Commission always for Team Lead
+    drawLineItem('Team Commission', teamCommission);
+  } else if (sdrCommission > 0) {
+    // Show Campaign Commission for SDR only if > 0
+    drawLineItem('Commission (Campaign Success)', sdrCommission);
+  }
+
+  if (bonus > 0) {
+    const bonusLabel = 'Bonus' + (payslip.bonusNotes ? ` (${payslip.bonusNotes})` : '');
+    drawLineItem(bonusLabel, bonus);
+  }
+  
+  drawLineItem('Total Additions', totalAdditions, true);
+  y += 5;
+
+  // ---------------- DEDUCTIONS SECTION ----------------
+  drawSectionHeader('Deductions');
   let hasDeductions = false;
-
-  if (payslip.unpaidLeaveDeduction && payslip.unpaidLeaveDeduction > 0) {
-    doc.fillColor(gray).text('Unpaid Leave Deduction', 50, y);
-    doc.fillColor(dark).text(formatMoney(payslip.unpaidLeaveDeduction), 420, y);
-    y += 18;
+  
+  if (absentsLatesDeduction > 0) {
+    drawLineItem('Absents & Lates Deduction', absentsLatesDeduction);
     hasDeductions = true;
   }
-  if (payslip.lateDeduction && payslip.lateDeduction > 0) {
-    doc.fillColor(gray).text('Late Check-In Penalties', 50, y);
-    doc.fillColor(dark).text(formatMoney(payslip.lateDeduction), 420, y);
-    y += 18;
+  
+  if (loansDeduction > 0) {
+    drawLineItem('Advance Salary & Loan Repayment', loansDeduction);
     hasDeductions = true;
   }
-  if (payslip.loansDeduction && payslip.loansDeduction > 0) {
-    doc.fillColor(gray).text('Loan / Advance Installment', 50, y);
-    doc.fillColor(dark).text(formatMoney(payslip.loansDeduction), 420, y);
-    y += 18;
-    hasDeductions = true;
-  }
-  if (payslip.otherDeductions && payslip.otherDeductions > 0) {
-    doc.fillColor(gray).text('Other Deductions' + (payslip.deductionNotes ? ` (${payslip.deductionNotes})` : ''), 50, y, { width: 350 });
-    doc.fillColor(dark).text(formatMoney(payslip.otherDeductions), 420, y);
-    y += 18;
+  
+  if (otherDeductions > 0) {
+    const dedLabel = 'Penalty / Other Deductions' + (payslip.deductionNotes ? ` (${payslip.deductionNotes})` : '');
+    drawLineItem(dedLabel, otherDeductions);
     hasDeductions = true;
   }
   
   if (!hasDeductions) {
-    doc.fillColor(gray).text('No deductions for this period', 50, y);
-    y += 18;
+    doc.fontSize(9).font('Helvetica-Oblique').fillColor('#9CA3AF').text('No deductions for this period', 50, y);
+    y += 14;
   }
+  
+  drawLineItem('Total Deductions', totalDeductions, true);
+  y += 5;
 
-  y += 14;
-  doc.moveTo(50, y).lineTo(545, y).strokeColor(blue).lineWidth(1.5).stroke();
-  y += 16;
+  // ---------------- SALARY SUMMARY CARD ----------------
+  doc.rect(50, y, 495, 55).fill('#EFF6FF').strokeColor('#BFDBFE').lineWidth(1).stroke();
+  
+  doc.fontSize(8).font('Helvetica').fillColor('#1E40AF');
+  doc.text('Total Salary & Allowances:', 65, y + 10);
+  doc.text(formatMoney(basicSalary + attendanceAllowance + punctualityAllowance), 65, y + 10, { align: 'right', width: 465 });
 
-  doc.font('Helvetica-Bold').fontSize(13).fillColor(blue).text('Net Pay', 50, y);
-  doc.text(formatMoney(payslip.netPay), 420, y);
+  doc.text('Total Additions:', 65, y + 22);
+  doc.text(formatMoney(totalAdditions), 65, y + 22, { align: 'right', width: 465 });
+
+  doc.text('Total Deductions:', 65, y + 34);
+  doc.text(formatMoney(totalDeductions), 65, y + 34, { align: 'right', width: 465 });
+
+  y += 65;
+
+  // Prominent Net Payment bar
+  doc.rect(50, y, 495, 32).fill('#1E3A8A');
+  doc.fontSize(11).font('Helvetica-Bold').fillColor('#FFFFFF');
+  doc.text('NET PAYMENT PAYOUT', 65, y + 10);
+  doc.fontSize(12);
+  doc.text(formatMoney(netPayment), 65, y + 10, { align: 'right', width: 465 });
 
   y += 50;
-  doc.font('Helvetica').fontSize(8).fillColor(gray)
-    .text('This is a system-generated payslip and does not require a signature.', 50, y);
+
+  // ---------------- FOOTER & NOTES ----------------
+  doc.fontSize(8).font('Helvetica').fillColor('#9CA3AF');
+  doc.text('This is a system-generated payslip and does not require a signature.', 50, y, { align: 'center', width: 495 });
+  y += 11;
+  doc.font('Helvetica-Bold').fillColor('#4B5563');
+  doc.text('Brandigade HR Department', 50, y, { align: 'center', width: 495 });
+  y += 10;
+  doc.font('Helvetica').fillColor('#9CA3AF');
+  doc.text('Generated Automatically by Brandigade HRIS', 50, y, { align: 'center', width: 495 });
 
   doc.end();
 }

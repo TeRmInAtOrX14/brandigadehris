@@ -193,9 +193,7 @@ export default function Attendance() {
                   <th className="p-4">Staff Member</th>
                   <th className="p-4">Status</th>
                   <th className="p-4">Check-In</th>
-                  <th className="p-4">Check-Out</th>
                   <th className="p-4">Late Mins</th>
-                  <th className="p-4">Overtime</th>
                   <th className="p-4">Note / Reason</th>
                 </tr>
               </thead>
@@ -221,17 +219,9 @@ export default function Attendance() {
                       </span>
                     </td>
                     <td className="p-4 font-mono font-bold text-brand-text">{formatTime(rec.checkIn)}</td>
-                    <td className="p-4 font-mono font-bold text-brand-text">{formatTime(rec.checkOut)}</td>
                     <td className="p-4 font-mono text-center">
                       {rec.late > 0 ? (
                         <span className="text-brand-amber font-bold">{rec.late} mins</span>
-                      ) : (
-                        <span className="text-brand-text-mute">-</span>
-                      )}
-                    </td>
-                    <td className="p-4 font-mono text-center">
-                      {rec.overtime > 0 ? (
-                        <span className="text-brand-green font-bold">{rec.overtime} mins</span>
                       ) : (
                         <span className="text-brand-text-mute">-</span>
                       )}
@@ -299,24 +289,13 @@ export default function Attendance() {
                   </select>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-[10px] font-bold uppercase tracking-wider text-brand-text-soft mb-2">Check-In Time</label>
-                    <input
-                      type="datetime-local"
-                      {...register('checkIn')}
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-brand-border bg-brand-bg text-xs text-white focus:outline-none"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] font-bold uppercase tracking-wider text-brand-text-soft mb-2">Check-Out Time</label>
-                    <input
-                      type="datetime-local"
-                      {...register('checkOut')}
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-brand-border bg-brand-bg text-xs text-white focus:outline-none"
-                    />
-                  </div>
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-brand-text-soft mb-2">Check-In Time</label>
+                  <input
+                    type="datetime-local"
+                    {...register('checkIn')}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-brand-border bg-brand-bg text-xs text-white focus:outline-none"
+                  />
                 </div>
 
                 <div>

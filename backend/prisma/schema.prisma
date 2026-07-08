@@ -69,14 +69,12 @@ model Employee {
   manager          Employee?   @relation("EmployeeToManager", fields: [managerId], references: [id])
   subordinates     Employee[]  @relation("EmployeeToManager")
   
-  dateOfJoining    DateTime
   status           String      @default("active") // active, on_leave, terminated, resigned
   baseSalary       Float       @default(0)
   currency         String      @default("PKR")
   phone            String?
-  cnic             String?     @unique
+  birthday         String?
   bankAccount      String?
-  address          String?
   emergencyContact String?
   photoUrl         String?
   
@@ -307,6 +305,8 @@ model Payslip {
   bonus                Float      @default(0)
   commission           Float      @default(0)
   spiffs               Float      @default(0)
+  attendanceAllowance  Float      @default(0)
+  punctualityAllowance Float      @default(0)
   
   netPay               Float
   

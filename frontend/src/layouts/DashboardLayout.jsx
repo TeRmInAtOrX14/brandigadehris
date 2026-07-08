@@ -77,13 +77,13 @@ export default function DashboardLayout() {
   const unreadCount = notifications.filter(n => !n.isRead).length;
 
   const links = [
-    { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard, roles: ['Admin', 'CEO', 'COO', 'Team Lead', 'Employee'] },
-    { label: 'Employees', path: '/dashboard/employees', icon: Users, roles: ['Admin', 'CEO', 'COO', 'Team Lead'] },
-    { label: 'Attendance', path: '/dashboard/attendance', icon: CalendarCheck, roles: ['Admin', 'CEO', 'COO', 'Team Lead', 'Employee'] },
-    { label: 'Requests', path: '/dashboard/requests', icon: FileSpreadsheet, roles: ['Admin', 'CEO', 'COO', 'Team Lead', 'Employee'] },
-    { label: 'Campaigns', path: '/dashboard/campaigns', icon: Briefcase, roles: ['Admin', 'CEO', 'COO', 'Team Lead', 'Employee'] },
-    { label: 'Loans & Advances', path: '/dashboard/loans', icon: PiggyBank, roles: ['Admin', 'CEO', 'COO', 'Team Lead', 'Employee'] },
-    { label: 'Payroll & Payslips', path: '/dashboard/payroll', icon: FileText, roles: ['Admin', 'CEO', 'COO', 'Team Lead', 'Employee'] },
+    { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard, roles: ['Admin', 'CEO', 'COO', 'Team Lead', 'Employee', 'SDR'] },
+    { label: 'Employees', path: '/dashboard/employees', icon: Users, roles: ['Admin', 'CEO', 'COO', 'Team Lead', 'Employee', 'SDR'] },
+    { label: 'Attendance', path: '/dashboard/attendance', icon: CalendarCheck, roles: ['Admin', 'CEO', 'COO', 'Team Lead', 'Employee', 'SDR'] },
+    { label: 'Requests', path: '/dashboard/requests', icon: FileSpreadsheet, roles: ['Admin', 'CEO', 'COO', 'Team Lead', 'Employee', 'SDR'] },
+    { label: 'Campaigns', path: '/dashboard/campaigns', icon: Briefcase, roles: ['Admin', 'CEO', 'COO', 'Team Lead', 'Employee', 'SDR'] },
+    { label: 'Loans & Advances', path: '/dashboard/loans', icon: PiggyBank, roles: ['Admin', 'CEO', 'COO', 'Team Lead', 'Employee', 'SDR'] },
+    { label: 'Payroll & Payslips', path: '/dashboard/payroll', icon: FileText, roles: ['Admin', 'CEO', 'COO', 'Team Lead', 'Employee', 'SDR'] },
     { label: 'Audit Trail', path: '/dashboard/audit', icon: ShieldAlert, roles: ['Admin', 'CEO', 'COO'] }
   ];
 
@@ -101,7 +101,6 @@ export default function DashboardLayout() {
       <div className="noise-grid absolute inset-0 z-0 pointer-events-none" />
 
       {/* ---------------- Sidebar (Desktop) ---------------- */}
-      {currentUser.role !== 'SDR' && (
       <aside
         className={`hidden lg:flex flex-col bg-brand-bg-soft border-r border-brand-border shrink-0 z-10 transition-all duration-300 ${
           collapsed ? 'w-20' : 'w-64'
@@ -195,7 +194,7 @@ export default function DashboardLayout() {
             {!collapsed && <span>Sign Out</span>}
           </button>
         </div>
-      </aside>) }
+      </aside>
 
       {/* ---------------- Sidebar (Mobile Drawer) ---------------- */}
       <AnimatePresence>

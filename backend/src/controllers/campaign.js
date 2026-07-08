@@ -276,6 +276,19 @@ exports.assignMember = async (req, res, next) => {
       }
     });
 
+    // Sync the campaign member role to the User role in DB
+    const emp = await prisma.employee.findUnique({
+      where: { id: employeeId },
+      select: { userId: true }
+    });
+    if (emp && emp.userId) {
+      const newUserRole = role === 'team_lead' ? 'Team Lead' : 'SDR';
+      await prisma.user.update({
+        where: { id: emp.userId },
+        data: { role: newUserRole }
+      });
+    }
+
     await logAudit(req.user.id, 'ASSIGN_CAMPAIGN_MEMBER', 'CampaignMember', member.id, { campaignId, employeeId, role });
     res.json(member);
   } catch (err) {
@@ -295,6 +308,18 @@ exports.unassignMember = async (req, res, next) => {
         }
       }
     });
+
+    // Revert User role to 'Employee' since they are unassigned
+    const emp = await prisma.employee.findUnique({
+      where: { id: employeeId },
+      select: { userId: true }
+    });
+    if (emp && emp.userId) {
+      await prisma.user.update({
+        where: { id: emp.userId },
+        data: { role: 'Employee' }
+      });
+    }
 
     await logAudit(req.user.id, 'UNASSIGN_CAMPAIGN_MEMBER', 'CampaignMember', null, { campaignId, employeeId });
     res.json({ message: 'Employee unassigned from campaign successfully' });
@@ -321,6 +346,21 @@ exports.toggleMemberStatus = async (req, res, next) => {
       },
       data: { status }
     });
+
+    // Update User role depending on whether they are active or inactive
+    const emp = await prisma.employee.findUnique({
+      where: { id: employeeId },
+      select: { userId: true }
+    });
+    if (emp && emp.userId) {
+      const newUserRole = status === 'active'
+        ? (member.role === 'team_lead' ? 'Team Lead' : 'SDR')
+        : 'Employee';
+      await prisma.user.update({
+        where: { id: emp.userId },
+        data: { role: newUserRole }
+      });
+    }
 
     await logAudit(req.user.id, 'TOGGLE_MEMBER_STATUS', 'CampaignMember', member.id, { status });
     res.json(member);

@@ -233,34 +233,20 @@ async function syncZKTeco() {
       const mapKey     = `${emp.id}_${dateKey}`;
       const existing   = existingMap[mapKey];
 
-      // Merge: always keep the EARLIEST check-in and LATEST check-out
-      // This ensures corrections from the device are always reflected
+      // Merge: always keep the EARLIEST check-in
       const finalCheckIn  = minDate(existing?.checkIn  || null, deviceCheckIn);
-      const finalCheckOut = maxDate(existing?.checkOut || null, deviceCheckOut);
+      const finalCheckOut = null; // Removed check-out time
 
       // Recalculate metrics from the merged times
       const checkInMinutes   = finalCheckIn.getHours() * 60 + finalCheckIn.getMinutes();
       const shiftStartMins   = timeToMinutes(emp.shiftStart || OFFICE_START);
-      const shiftEndMins     = timeToMinutes(emp.shiftEnd   || OFFICE_END);
       const grace            = emp.graceMinutes !== undefined ? emp.graceMinutes : 15;
+      const diff             = checkInMinutes - shiftStartMins;
       const lateMins         = diff > grace ? diff : 0;
 
       let earlyDepartureMins = 0;
       let overtimeMins       = 0;
-      if (finalCheckOut) {
-        const checkOutMins = finalCheckOut.getHours() * 60 + finalCheckOut.getMinutes();
-        if (checkOutMins < shiftEndMins) {
-          earlyDepartureMins = shiftEndMins - checkOutMins;
-        } else {
-          overtimeMins = checkOutMins - shiftEndMins;
-        }
-      }
-
-      let status = 'present';
-      if (finalCheckOut) {
-        const workedMins = (finalCheckOut - finalCheckIn) / 60000;
-        if (workedMins < 240) status = 'half_day';
-      }
+      let status             = 'present';
 
       await prisma.attendance.upsert({
         where: {

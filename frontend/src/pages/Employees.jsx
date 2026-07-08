@@ -21,6 +21,18 @@ import {
 import api from '../utils/api';
 import toast from 'react-hot-toast';
 
+const getTeamPlaceholder = (emp) => {
+  const role = emp.user?.role;
+  const designation = (emp.designation || '').toLowerCase();
+  if (['Admin', 'CEO', 'COO'].includes(role)) {
+    return 'Management';
+  }
+  if (designation.includes('office') || designation.includes('boy') || designation.includes('support') || designation.includes('helper') || designation.includes('cleaner') || designation.includes('peon')) {
+    return 'Support Staff';
+  }
+  return 'General Operations';
+};
+
 export default function Employees() {
   const [employees, setEmployees] = useState([]);
   const [teams, setTeams] = useState([]);
@@ -61,11 +73,6 @@ export default function Employees() {
   const handleEditClick = (emp) => {
     setEditingEmployee(emp);
     
-    let formattedDate = '';
-    if (emp.dateOfJoining) {
-      formattedDate = new Date(emp.dateOfJoining).toISOString().substring(0, 10);
-    }
-
     resetEdit({
       email: emp.user?.email || '',
       role: emp.user?.role || 'Employee',
@@ -75,15 +82,13 @@ export default function Employees() {
       designation: emp.designation || '',
       teamIds: emp.campaignMembers?.map(m => m.campaign.id) || [],
       baseSalary: emp.baseSalary || 0,
-      dateOfJoining: formattedDate,
       zkUserId: emp.zkUserId || '',
       shiftStart: emp.shiftStart || '09:30',
       shiftEnd: emp.shiftEnd || '18:30',
       graceMinutes: emp.graceMinutes !== undefined ? emp.graceMinutes : 15,
-      cnic: emp.cnic || '',
       phone: emp.phone || '',
       emergencyContact: emp.emergencyContact || '',
-      address: emp.address || '',
+      birthday: emp.birthday || '',
       status: emp.status || 'active',
       salaryChangeReason: '',
       salaryChangeEffectiveDate: new Date().toISOString().substring(0, 10)
@@ -241,6 +246,7 @@ export default function Employees() {
                   <th className="p-4">Full Name</th>
                   <th className="p-4">Designation</th>
                   <th className="p-4">Team</th>
+                  <th className="p-4">Bank Account</th>
                   <th className="p-4">Shift Timings</th>
                   <th className="p-4">Status</th>
                   <th className="p-4 text-right">Actions</th>
@@ -261,10 +267,13 @@ export default function Employees() {
                             </span>
                           ))
                         ) : (
-                          <span className="text-brand-text-mute text-[10px]">No Team</span>
+                          <span className="px-2 py-0.5 rounded-lg bg-brand-border text-brand-text-soft text-[9px] font-extrabold uppercase tracking-wide border border-brand-border/20">
+                            {getTeamPlaceholder(emp)}
+                          </span>
                         )}
                       </div>
                     </td>
+                    <td className="p-4 font-mono text-white/95 font-medium">{emp.bankAccount || '-'}</td>
                     <td className="p-4 font-medium text-brand-text-soft font-mono">{emp.shiftStart} - {emp.shiftEnd}</td>
                     <td className="p-4">
                       <span className={`px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wider border ${
@@ -284,7 +293,7 @@ export default function Employees() {
                         >
                           <Eye className="w-3.5 h-3.5" />
                         </button>
-                        {isAdmin && (
+                        {(isAdmin || currentUser.id === emp.userId || (currentUser.employee && currentUser.employee.id === emp.id)) && (
                           <button
                             onClick={() => handleEditClick(emp)}
                             className="p-1.5 rounded-xl border border-brand-border text-brand-text-soft hover:text-white hover:border-brand-blue-soft transition-colors cursor-pointer"
@@ -356,9 +365,9 @@ export default function Employees() {
                       </div>
                     </div>
                     <div>
-                      <p className="text-[9px] text-brand-text-mute uppercase font-bold tracking-wider">Date of Joining</p>
-                      <p className="text-xs text-white font-semibold mt-1 font-mono">
-                        {detailEmployee.dateOfJoining ? new Date(detailEmployee.dateOfJoining).toLocaleDateString() : '-'}
+                      <p className="text-[9px] text-brand-text-mute uppercase font-bold tracking-wider">Birthday</p>
+                      <p className="text-xs text-white font-semibold mt-1">
+                        {detailEmployee.birthday || '-'}
                       </p>
                     </div>
                   </div>
@@ -382,14 +391,6 @@ export default function Employees() {
                     <div>
                       <p className="text-[9px] text-brand-text-mute uppercase font-bold tracking-wider">Mobile Phone</p>
                       <p className="text-xs text-white font-semibold mt-1 font-mono">{detailEmployee.phone || '-'}</p>
-                    </div>
-                    <div className="col-span-2">
-                      <p className="text-[9px] text-brand-text-mute uppercase font-bold tracking-wider">CNIC Number</p>
-                      <p className="text-xs text-white font-semibold mt-1 font-mono">{detailEmployee.cnic || '-'}</p>
-                    </div>
-                    <div className="col-span-2">
-                      <p className="text-[9px] text-brand-text-mute uppercase font-bold tracking-wider">Home Address</p>
-                      <p className="text-xs text-white font-semibold mt-1 leading-relaxed">{detailEmployee.address || '-'}</p>
                     </div>
                   </div>
 
@@ -489,6 +490,7 @@ export default function Employees() {
                       className="w-full px-3.5 py-2.5 rounded-xl border border-brand-border bg-brand-bg text-xs text-white focus:outline-none cursor-pointer"
                     >
                       <option value="Employee">Employee</option>
+                      <option value="SDR">SDR</option>
                       <option value="Team Lead">Team Lead</option>
                       <option value="Admin">Admin</option>
                       <option value="CEO">CEO</option>
@@ -555,10 +557,21 @@ export default function Employees() {
                   </div>
 
                   <div>
-                    <label className="block text-[10px] font-bold uppercase tracking-wider text-brand-text-soft mb-2">Date of Joining *</label>
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-brand-text-soft mb-2">Birthday (for Wishes)</label>
                     <input
-                      type="date"
-                      {...register('dateOfJoining', { required: true })}
+                      type="text"
+                      {...register('birthday')}
+                      placeholder="e.g. 15th June"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-brand-border bg-brand-bg text-xs text-white focus:outline-none focus:border-brand-blue"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-brand-text-soft mb-2">Bank Account</label>
+                    <input
+                      type="text"
+                      {...register('bankAccount')}
+                      placeholder="e.g. Meezan Bank - 02341234"
                       className="w-full px-3.5 py-2.5 rounded-xl border border-brand-border bg-brand-bg text-xs text-white focus:outline-none focus:border-brand-blue"
                     />
                   </div>
@@ -607,16 +620,7 @@ export default function Employees() {
                     />
                   </div>
 
-                  <div className="col-span-2">
-                    <label className="block text-[10px] font-bold uppercase tracking-wider text-brand-text-soft mb-2">CNIC Number</label>
-                    <input
-                      type="text"
-                      {...register('cnic')}
-                      placeholder="e.g. 42101-1234567-1"
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-brand-border bg-brand-bg text-xs text-white focus:outline-none"
-                    />
                   </div>
-                </div>
 
                 <div className="mt-6 flex gap-3 justify-end border-t border-brand-border pt-4">
                   <button
@@ -666,7 +670,8 @@ export default function Employees() {
                       type="email"
                       {...registerEdit('email', { required: true })}
                       placeholder="e.g. employee@brandigade.com"
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-brand-border bg-brand-bg text-xs text-white focus:outline-none focus:border-brand-blue"
+                      disabled={!isAdmin}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-brand-border bg-brand-bg text-xs text-white focus:outline-none focus:border-brand-blue disabled:opacity-50"
                     />
                   </div>
 
@@ -674,9 +679,11 @@ export default function Employees() {
                     <label className="block text-[10px] font-bold uppercase tracking-wider text-brand-text-soft mb-2">Role *</label>
                     <select
                       {...registerEdit('role', { required: true })}
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-brand-border bg-brand-bg text-xs text-white focus:outline-none cursor-pointer"
+                      disabled={!isAdmin}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-brand-border bg-brand-bg text-xs text-white focus:outline-none cursor-pointer disabled:opacity-50"
                     >
                       <option value="Employee">Employee</option>
+                      <option value="SDR">SDR</option>
                       <option value="Team Lead">Team Lead</option>
                       <option value="Admin">Admin</option>
                       <option value="CEO">CEO</option>
@@ -688,7 +695,8 @@ export default function Employees() {
                     <label className="block text-[10px] font-bold uppercase tracking-wider text-brand-text-soft mb-2">Login Status *</label>
                     <select
                       {...registerEdit('isActive', { setValueAs: v => v === 'true' })}
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-brand-border bg-brand-bg text-xs text-white focus:outline-none cursor-pointer"
+                      disabled={!isAdmin}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-brand-border bg-brand-bg text-xs text-white focus:outline-none cursor-pointer disabled:opacity-50"
                     >
                       <option value="true">Active Login</option>
                       <option value="false">Disabled / Blocked</option>
@@ -699,7 +707,8 @@ export default function Employees() {
                     <label className="block text-[10px] font-bold uppercase tracking-wider text-brand-text-soft mb-2">Employment Status *</label>
                     <select
                       {...registerEdit('status', { required: true })}
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-brand-border bg-brand-bg text-xs text-white focus:outline-none cursor-pointer"
+                      disabled={!isAdmin}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-brand-border bg-brand-bg text-xs text-white focus:outline-none cursor-pointer disabled:opacity-50"
                     >
                       <option value="active">Active</option>
                       <option value="on_leave">On Leave</option>
@@ -714,8 +723,9 @@ export default function Employees() {
                     <input
                       type="text"
                       {...registerEdit('employeeCode', { required: true })}
+                      disabled={!isAdmin}
                       placeholder="e.g. EMP-004"
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-brand-border bg-brand-bg text-xs text-white focus:outline-none focus:border-brand-blue"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-brand-border bg-brand-bg text-xs text-white focus:outline-none focus:border-brand-blue disabled:opacity-50"
                     />
                   </div>
 
@@ -724,8 +734,9 @@ export default function Employees() {
                     <input
                       type="text"
                       {...registerEdit('fullName', { required: true })}
+                      disabled={!isAdmin}
                       placeholder="e.g. Raameen Ali"
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-brand-border bg-brand-bg text-xs text-white focus:outline-none focus:border-brand-blue"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-brand-border bg-brand-bg text-xs text-white focus:outline-none focus:border-brand-blue disabled:opacity-50"
                     />
                   </div>
 
@@ -734,8 +745,9 @@ export default function Employees() {
                     <input
                       type="text"
                       {...registerEdit('designation', { required: true })}
+                      disabled={!isAdmin}
                       placeholder="e.g. SDR Outbound Campaigner"
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-brand-border bg-brand-bg text-xs text-white focus:outline-none focus:border-brand-blue"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-brand-border bg-brand-bg text-xs text-white focus:outline-none focus:border-brand-blue disabled:opacity-50"
                     />
                   </div>
 
@@ -748,7 +760,8 @@ export default function Employees() {
                             type="checkbox"
                             value={t.id}
                             {...registerEdit('teamIds')}
-                            className="w-4 h-4 rounded border-brand-border text-brand-blue bg-brand-bg focus:ring-0 focus:ring-offset-0 cursor-pointer"
+                            disabled={!isAdmin}
+                            className="w-4 h-4 rounded border-brand-border text-brand-blue bg-brand-bg focus:ring-0 focus:ring-offset-0 cursor-pointer disabled:opacity-50"
                           />
                           <span>{t.name}</span>
                         </label>
@@ -761,16 +774,18 @@ export default function Employees() {
                     <input
                       type="number"
                       {...registerEdit('baseSalary', { required: true })}
+                      disabled={!isAdmin}
                       placeholder="e.g. 55000"
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-brand-border bg-brand-bg text-xs text-white focus:outline-none focus:border-brand-blue"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-brand-border bg-brand-bg text-xs text-white focus:outline-none focus:border-brand-blue disabled:opacity-50"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-[10px] font-bold uppercase tracking-wider text-brand-text-soft mb-2">Date of Joining *</label>
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-brand-text-soft mb-2">Birthday (for Wishes)</label>
                     <input
-                      type="date"
-                      {...registerEdit('dateOfJoining', { required: true })}
+                      type="text"
+                      {...registerEdit('birthday')}
+                      placeholder="e.g. 15th June"
                       className="w-full px-3.5 py-2.5 rounded-xl border border-brand-border bg-brand-bg text-xs text-white focus:outline-none focus:border-brand-blue"
                     />
                   </div>
@@ -780,8 +795,9 @@ export default function Employees() {
                     <input
                       type="text"
                       {...registerEdit('zkUserId')}
+                      disabled={!isAdmin}
                       placeholder="e.g. 4"
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-brand-border bg-brand-bg text-xs text-white focus:outline-none"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-brand-border bg-brand-bg text-xs text-white focus:outline-none disabled:opacity-50"
                     />
                   </div>
 
@@ -790,8 +806,9 @@ export default function Employees() {
                     <input
                       type="text"
                       {...registerEdit('shiftStart', { required: true })}
+                      disabled={!isAdmin}
                       placeholder="e.g. 09:30"
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-brand-border bg-brand-bg text-xs text-white focus:outline-none focus:border-brand-blue"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-brand-border bg-brand-bg text-xs text-white focus:outline-none focus:border-brand-blue disabled:opacity-50"
                     />
                   </div>
 
@@ -800,8 +817,9 @@ export default function Employees() {
                     <input
                       type="text"
                       {...registerEdit('shiftEnd', { required: true })}
+                      disabled={!isAdmin}
                       placeholder="e.g. 18:30"
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-brand-border bg-brand-bg text-xs text-white focus:outline-none focus:border-brand-blue"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-brand-border bg-brand-bg text-xs text-white focus:outline-none focus:border-brand-blue disabled:opacity-50"
                     />
                   </div>
 
@@ -810,6 +828,7 @@ export default function Employees() {
                     <input
                       type="number"
                       {...registerEdit('graceMinutes', { required: true })}
+                      disabled={!isAdmin}
                       placeholder="e.g. 15"
                       className="w-full px-3.5 py-2.5 rounded-xl border border-brand-border bg-brand-bg text-xs text-white focus:outline-none focus:border-brand-blue"
                     />
@@ -835,25 +854,17 @@ export default function Employees() {
                     />
                   </div>
 
-                  <div className="col-span-2">
-                    <label className="block text-[10px] font-bold uppercase tracking-wider text-brand-text-soft mb-2">CNIC Number</label>
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-brand-text-soft mb-2">Bank Account</label>
                     <input
                       type="text"
-                      {...registerEdit('cnic')}
-                      placeholder="e.g. 42101-1234567-1"
+                      {...registerEdit('bankAccount')}
+                      placeholder="e.g. Meezan Bank - 02341234"
                       className="w-full px-3.5 py-2.5 rounded-xl border border-brand-border bg-brand-bg text-xs text-white focus:outline-none"
                     />
                   </div>
 
-                  <div className="col-span-2">
-                    <label className="block text-[10px] font-bold uppercase tracking-wider text-brand-text-soft mb-2">Home Address</label>
-                    <textarea
-                      rows="2"
-                      {...registerEdit('address')}
-                      placeholder="e.g. House 123, Street 4, Karachi"
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-brand-border bg-brand-bg text-xs text-white focus:outline-none"
-                    />
-                  </div>
+
 
                   {/* Salary Change Reason (Log history) */}
                   <div className="col-span-2 border-t border-brand-border pt-4 mt-2">

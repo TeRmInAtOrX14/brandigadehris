@@ -23,7 +23,10 @@ const requireAuth = async (req, res, next) => {
     }
 
     // Verify user still exists and is active
-    const user = await prisma.user.findUnique({ where: { id: decoded.userId } });
+    const user = await prisma.user.findUnique({
+      where: { id: decoded.userId },
+      include: { employee: true }
+    });
     
     if (!user || !user.isActive) {
       return res.status(401).json({ error: 'Account disabled or deleted' });

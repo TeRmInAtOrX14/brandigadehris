@@ -61,7 +61,6 @@ async function main() {
             employeeCode: admin.employeeCode,
             fullName: admin.fullName,
             designation: admin.designation,
-            dateOfJoining: new Date(),
             status: 'active',
             baseSalary: 0,
             currency: 'PKR'

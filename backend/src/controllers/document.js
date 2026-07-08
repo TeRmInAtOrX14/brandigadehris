@@ -4,6 +4,19 @@ const { logAudit } = require('../utils/audit');
 
 const prisma = new PrismaClient();
 
+async function getTeamLeadSdrIds(leadEmployeeId) {
+  const activeCampaigns = await prisma.campaignMember.findMany({
+    where: { employeeId: leadEmployeeId, role: 'team_lead', status: 'active' },
+    select: { campaignId: true }
+  });
+  const campaignIds = activeCampaigns.map(c => c.campaignId);
+  const members = await prisma.campaignMember.findMany({
+    where: { campaignId: { in: campaignIds }, status: 'active' },
+    select: { employeeId: true }
+  });
+  return members.map(m => m.employeeId);
+}
+
 exports.uploadDocument = async (req, res, next) => {
   try {
     const { employeeId, name, type } = req.body;
@@ -68,20 +81,17 @@ exports.getDocuments = async (req, res, next) => {
     const where = {};
 
     // RBAC
-    if (req.user.role === 'Employee') {
+    if (['Employee', 'SDR'].includes(req.user.role)) {
       where.employeeId = req.user.employee.id;
     } else if (req.user.role === 'Team Lead') {
+      const sdrIds = await getTeamLeadSdrIds(req.user.employee?.id);
       if (employeeId) {
-        const targetEmp = await prisma.employee.findUnique({
-          where: { id: employeeId },
-          select: { teamId: true }
-        });
-        if (!targetEmp || targetEmp.teamId !== req.user.employee?.teamId) {
+        if (!sdrIds.includes(employeeId)) {
           return res.status(403).json({ error: 'Access denied.' });
         }
         where.employeeId = employeeId;
       } else {
-        where.employee = { teamId: req.user.employee?.teamId };
+        where.employeeId = { in: [req.user.employee?.id, ...sdrIds].filter(Boolean) };
       }
     } else {
       if (employeeId) where.employeeId = employeeId;

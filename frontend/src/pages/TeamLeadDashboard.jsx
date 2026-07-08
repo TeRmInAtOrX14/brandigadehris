@@ -1,23 +1,19 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Users, Edit, Trash2, Plus, Gift } from 'lucide-react';
+import { Users, Briefcase, CalendarCheck, AlertCircle, Clock } from 'lucide-react';
 import api from '../utils/api';
 import toast from 'react-hot-toast';
 
-// Team Lead Dashboard – shows data only for the lead's assigned team
-export default function TeamLeadDashboard() {
+export default function TeamLeadDashboard({ stats }) {
   const [teamMembers, setTeamMembers] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Current user info (role already guaranteed to be Team Lead by parent)
   const currentUser = JSON.parse(localStorage.getItem('user')) || {};
-  const teamId = currentUser.employee?.teamId;
 
   useEffect(() => {
     const fetchTeamMembers = async () => {
       try {
         setLoading(true);
-        // Backend endpoint respects Team Lead RBAC and will only return employees of this lead's team
         const res = await api.get('/employees');
         setTeamMembers(res.data);
       } catch (err) {
@@ -31,8 +27,11 @@ export default function TeamLeadDashboard() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[40vh]">
-        <p className="text-brand-text-soft">Loading team data...</p>
+      <div className="flex-1 flex items-center justify-center min-h-[40vh]">
+        <div className="flex flex-col items-center gap-3">
+          <Clock className="w-6 h-6 animate-spin text-brand-cyan" />
+          <p className="text-brand-text-soft text-xs">Loading team metrics...</p>
+        </div>
       </div>
     );
   }
@@ -42,46 +41,89 @@ export default function TeamLeadDashboard() {
 
   return (
     <motion.div variants={container} initial="hidden" animate="show" className="space-y-6">
-      <motion.h2 variants={item} className="text-2xl font-bold text-white">
-        Team Lead Dashboard {teamId ? `- Team ${teamId}` : ''}
-      </motion.h2>
-
-      {/* Team actions */}
-      <motion.div variants={item} className="flex space-x-4">
-        <button className="flex items-center gap-2 px-4 py-2 bg-brand-blue text-white rounded hover:bg-brand-blue/80">
-          <Plus className="w-4 h-4" /> Add Member
-        </button>
-        <button className="flex items-center gap-2 px-4 py-2 bg-brand-green text-white rounded hover:bg-brand-green/80">
-          <Gift className="w-4 h-4" /> Give Spiff
-        </button>
+      <motion.div variants={item} className="flex justify-between items-center">
+        <div>
+          <h2 className="text-2xl font-bold text-white font-display">Team Lead Dashboard</h2>
+          <p className="text-xs text-brand-text-soft mt-1">Real-time indicators for your campaign members.</p>
+        </div>
       </motion.div>
 
-      {/* Team members table */}
-      <motion.table variants={item} className="w-full text-sm text-left text-brand-text-soft">
-        <thead className="bg-brand-bg-soft">
-          <tr>
-            <th className="px-4 py-2">Employee</th>
-            <th className="px-4 py-2">Designation</th>
-            <th className="px-4 py-2">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {teamMembers.map((emp) => (
-            <tr key={emp.id} className="border-b border-brand-border hover:bg-brand-bg-soft/50">
-              <td className="px-4 py-2">{emp.fullName}</td>
-              <td className="px-4 py-2">{emp.designation}</td>
-              <td className="px-4 py-2 flex space-x-2">
-                <button className="p-1 rounded hover:bg-brand-bg-soft">
-                  <Edit className="w-4 h-4 text-brand-blue" />
-                </button>
-                <button className="p-1 rounded hover:bg-brand-bg-soft">
-                  <Trash2 className="w-4 h-4 text-brand-red" />
-                </button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </motion.table>
+      {/* Team Metrics Cards */}
+      <motion.div variants={item} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        {/* Team Size */}
+        <div className="p-6 rounded-2xl border border-brand-border bg-brand-bg-soft/40 backdrop-blur-md text-left">
+          <div className="flex items-center justify-between mb-4">
+            <span className="text-[10px] font-bold text-brand-text-soft uppercase tracking-widest">Team Size</span>
+            <Users className="w-5 h-5 text-brand-blue" />
+          </div>
+          <p className="text-3xl font-extrabold text-white font-display">{stats?.totalEmployees || 0}</p>
+        </div>
+
+        {/* Present Today */}
+        <div className="p-6 rounded-2xl border border-brand-border bg-brand-bg-soft/40 backdrop-blur-md text-left">
+          <div className="flex items-center justify-between mb-4">
+            <span className="text-[10px] font-bold text-brand-text-soft uppercase tracking-widest">Present Today</span>
+            <CalendarCheck className="w-5 h-5 text-brand-green" />
+          </div>
+          <p className="text-3xl font-extrabold text-white font-display">{stats?.presentToday || 0}</p>
+        </div>
+
+        {/* Late Today */}
+        <div className="p-6 rounded-2xl border border-brand-border bg-brand-bg-soft/40 backdrop-blur-md text-left">
+          <div className="flex items-center justify-between mb-4">
+            <span className="text-[10px] font-bold text-brand-text-soft uppercase tracking-widest">Late Today</span>
+            <AlertCircle className="w-5 h-5 text-brand-red" />
+          </div>
+          <p className="text-3xl font-extrabold text-white font-display">{stats?.lateToday || 0}</p>
+        </div>
+
+        {/* Active Campaigns */}
+        <div className="p-6 rounded-2xl border border-brand-border bg-brand-bg-soft/40 backdrop-blur-md text-left">
+          <div className="flex items-center justify-between mb-4">
+            <span className="text-[10px] font-bold text-brand-text-soft uppercase tracking-widest">Led Campaigns</span>
+            <Briefcase className="w-5 h-5 text-brand-cyan" />
+          </div>
+          <p className="text-3xl font-extrabold text-white font-display">{stats?.activeProjects || 0}</p>
+        </div>
+      </motion.div>
+
+      {/* Team Roster Table */}
+      <motion.div variants={item} className="border border-brand-border rounded-2xl bg-brand-bg-soft/40 overflow-hidden">
+        <div className="p-4 border-b border-brand-border bg-brand-bg-elevated/20">
+          <h3 className="text-xs font-extrabold text-white uppercase tracking-wider font-display">My Team Roster</h3>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="border-b border-brand-border bg-brand-bg-elevated/40 text-[9px] uppercase font-extrabold tracking-widest text-brand-text-soft">
+                <th className="p-4">Employee Code</th>
+                <th className="p-4">Name</th>
+                <th className="p-4">Designation</th>
+                <th className="p-4">Birthday</th>
+                <th className="p-4">Bank Account</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-brand-border text-xs text-brand-text-soft">
+              {teamMembers.map((emp) => (
+                <tr key={emp.id} className="hover:bg-brand-bg-elevated/20 transition-colors">
+                  <td className="p-4 font-mono text-brand-blue font-bold">{emp.employeeCode}</td>
+                  <td className="p-4 font-bold text-white">{emp.fullName}</td>
+                  <td className="p-4">{emp.designation}</td>
+                  <td className="p-4 font-mono">{emp.birthday || '-'}</td>
+                  <td className="p-4 font-mono">{emp.bankAccount || '-'}</td>
+                </tr>
+              ))}
+              {teamMembers.length === 0 && (
+                <tr>
+                  <td colSpan="5" className="p-8 text-center text-brand-text-mute text-xs">
+                    No team members assigned under your led campaigns.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </motion.div>
     </motion.div>
   );
 }

@@ -37,7 +37,6 @@ const bcrypt = require('bcryptjs');
         fullName: 'SDR Test User',
         designation: 'SDR',
         teamId: outreachTeam ? outreachTeam.id : undefined,
-        dateOfJoining: new Date(),
         status: 'active',
         baseSalary: 60000,
         currency: 'PKR',

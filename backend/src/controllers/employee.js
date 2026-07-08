@@ -43,16 +43,26 @@ exports.getEmployees = async (req, res, next) => {
       ];
     }
 
-    // Role restriction: Team Lead can only see employees in campaigns they actively lead
+    // Role restriction: Team Lead can only see employees in campaigns they actively lead, plus themselves
     if (req.user.role === 'Team Lead' && req.user.employee?.id) {
       const ledCampaigns = await prisma.campaignMember.findMany({
         where: { employeeId: req.user.employee.id, role: 'team_lead', status: 'active' },
         select: { campaignId: true }
       });
       const campaignIds = ledCampaigns.map(c => c.campaignId);
-      where.campaignMembers = {
-        some: { campaignId: { in: campaignIds }, status: 'active' }
-      };
+      where.OR = [
+        { id: req.user.employee.id },
+        {
+          campaignMembers: {
+            some: { campaignId: { in: campaignIds }, status: 'active' }
+          }
+        }
+      ];
+    }
+
+    // Role restriction: SDR & Employee can only see their own record
+    if (['Employee', 'SDR'].includes(req.user.role) && req.user.employee?.id) {
+      where.id = req.user.employee.id;
     }
 
     const employees = await prisma.employee.findMany({
@@ -87,9 +97,30 @@ exports.getEmployeeById = async (req, res, next) => {
   try {
     const { id } = req.params;
 
-    // Standard employees can only view their own details
-    if (req.user.role === 'Employee' && req.user.employee?.id !== id) {
+    // Standard employees and SDRs can only view their own details
+    if (['Employee', 'SDR'].includes(req.user.role) && req.user.employee?.id !== id) {
       return res.status(403).json({ error: 'Access denied.' });
+    }
+
+    // Team Leads can only view their own details or employees on their led campaigns
+    if (req.user.role === 'Team Lead' && req.user.employee?.id !== id) {
+      const ledCampaigns = await prisma.campaignMember.findMany({
+        where: { employeeId: req.user.employee?.id, role: 'team_lead', status: 'active' },
+        select: { campaignId: true }
+      });
+      const campaignIds = ledCampaigns.map(c => c.campaignId);
+      
+      const isMemberOfLedCampaign = await prisma.campaignMember.findFirst({
+        where: {
+          employeeId: id,
+          campaignId: { in: campaignIds },
+          status: 'active'
+        }
+      });
+
+      if (!isMemberOfLedCampaign) {
+        return res.status(403).json({ error: 'Access denied.' });
+      }
     }
 
     const employee = await prisma.employee.findUnique({
@@ -135,13 +166,11 @@ exports.createEmployee = async (req, res, next) => {
       fullName,
       designation,
       managerId,
-      dateOfJoining,
+      birthday,
       baseSalary,
       currency,
       phone,
-      cnic,
       bankAccount,
-      address,
       emergencyContact,
       shiftStart,
       shiftEnd,
@@ -184,13 +213,11 @@ exports.createEmployee = async (req, res, next) => {
           fullName,
           designation,
           managerId: managerId || null,
-          dateOfJoining: new Date(dateOfJoining),
           baseSalary: parseFloat(baseSalary) || 0,
           currency: currency || 'PKR',
           phone: phone || null,
-          cnic: cnic || null,
+          birthday: birthday || null,
           bankAccount: bankAccount || null,
-          address: address || null,
           emergencyContact: emergencyContact || null,
           shiftStart: shiftStart || '09:30',
           shiftEnd: shiftEnd || '18:30',
@@ -227,7 +254,7 @@ exports.createEmployee = async (req, res, next) => {
           employeeId: emp.id,
           newSalary: parseFloat(baseSalary) || 0,
           reason: 'Initial Salary Setup',
-          effectiveDate: new Date(dateOfJoining)
+          effectiveDate: new Date()
         }
       });
 
@@ -262,15 +289,15 @@ exports.updateEmployee = async (req, res, next) => {
     const { id } = req.params;
     const updates = req.body;
 
-    // Restriction: Normal Employee can only edit some fields of their own profile
-    if (req.user.role === 'Employee') {
+    // Restriction: Non-admin roles (Employee, SDR, Team Lead) can only edit some fields of their own profile
+    if (['Employee', 'SDR', 'Team Lead'].includes(req.user.role)) {
       if (req.user.employee?.id !== id) {
         return res.status(403).json({ error: 'Access denied.' });
       }
       // Limit fields normal employee can change
       const allowedSelfUpdates = {
         phone: updates.phone,
-        address: updates.address,
+        birthday: updates.birthday,
         emergencyContact: updates.emergencyContact,
         bankAccount: updates.bankAccount
       };
@@ -371,13 +398,11 @@ exports.updateEmployee = async (req, res, next) => {
           fullName: updates.fullName,
           designation: updates.designation,
           managerId: updates.managerId,
-          dateOfJoining: updates.dateOfJoining ? new Date(updates.dateOfJoining) : undefined,
           baseSalary: updates.baseSalary ? parseFloat(updates.baseSalary) : undefined,
           currency: updates.currency,
           phone: updates.phone,
-          cnic: updates.cnic,
+          birthday: updates.birthday,
           bankAccount: updates.bankAccount,
-          address: updates.address,
           emergencyContact: updates.emergencyContact,
           shiftStart: updates.shiftStart,
           shiftEnd: updates.shiftEnd,

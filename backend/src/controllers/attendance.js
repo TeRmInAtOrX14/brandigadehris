@@ -21,9 +21,8 @@ exports.getAttendance = async (req, res, next) => {
       }
     }
 
-    // Role-based restrictions
-    if (req.user.role === 'Employee') {
-      // Regular employees can only see their own attendance
+    if (['Employee', 'SDR'].includes(req.user.role)) {
+      // Regular employees and SDRs can only see their own attendance
       if (!req.user.employee) {
         return res.status(400).json({ error: 'No employee profile linked to user.' });
       }
@@ -42,6 +41,9 @@ exports.getAttendance = async (req, res, next) => {
         select: { employeeId: true }
       });
       const sdrIds = sdrs.map(s => s.employeeId);
+      if (req.user.employee?.id) {
+        sdrIds.push(req.user.employee.id);
+      }
 
       if (employeeId) {
         if (!sdrIds.includes(employeeId)) {
@@ -191,14 +193,18 @@ exports.manualPunch = async (req, res, next) => {
         date: dateMidnight,
         status,
         checkIn: checkInDate,
-        checkOut: checkOutDate,
+        checkOut: null,
+        earlyDeparture: 0,
+        overtime: 0,
         late: lateMins,
         note
       },
       update: {
         status,
         checkIn: checkInDate,
-        checkOut: checkOutDate,
+        checkOut: null,
+        earlyDeparture: 0,
+        overtime: 0,
         late: lateMins,
         note
       }

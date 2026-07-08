@@ -19,6 +19,7 @@ export default function Payroll() {
 
   // Modals
   const [runModalOpen, setRunModalOpen] = useState(false);
+  const [manualModalOpen, setManualModalOpen] = useState(false);
 
   const currentUser = JSON.parse(localStorage.getItem('user')) || { role: 'Employee' };
   const isAdmin = ['Admin', 'CEO', 'COO'].includes(currentUser.role);
@@ -30,6 +31,45 @@ export default function Payroll() {
       performance: []
     }
   });
+
+  const manualForm = useForm({
+    defaultValues: {
+      fullName: '',
+      employeeCode: '',
+      designation: '',
+      campaignName: '',
+      bankAccount: '',
+      periodMonth: new Date().getMonth() + 1,
+      periodYear: new Date().getFullYear(),
+      baseSalary: '',
+      attendanceAllowance: 2500,
+      punctualityAllowance: 2500,
+      spiff: 0,
+      commission: 0,
+      bonus: 0,
+      bonusNotes: '',
+      absentsLatesDeduction: 0,
+      loansDeduction: 0,
+      otherDeductions: 0,
+      deductionNotes: '',
+      isTeamLead: false
+    }
+  });
+
+  const handleGenerateManual = async (data) => {
+    try {
+      toast.loading('Generating manual payslip...', { id: 'manual-gen' });
+      const res = await api.post('/payroll/generate-manual-pdf', data, { responseType: 'blob' });
+      const file = new Blob([res.data], { type: 'application/pdf' });
+      const fileURL = URL.createObjectURL(file);
+      window.open(fileURL, '_blank');
+      toast.success('Generated successfully!', { id: 'manual-gen' });
+      setManualModalOpen(false);
+      manualForm.reset();
+    } catch (e) {
+      toast.error('Failed to generate manual payslip', { id: 'manual-gen' });
+    }
+  };
 
   const { fields, replace } = useFieldArray({
     control,
@@ -148,13 +188,22 @@ export default function Payroll() {
           <p className="text-xs text-brand-text-soft mt-1">Review finalized monthly payroll payouts or process target campaign data.</p>
         </div>
         {isAdmin && (
-          <button
-            onClick={() => setRunModalOpen(true)}
-            className="px-5 py-2.5 rounded-full bg-gradient-to-r from-brand-blue via-brand-violet to-brand-cyan text-brand-bg hover:scale-[1.02] active:scale-[0.98] font-bold font-display text-xs transition-all flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-brand-blue/20"
-          >
-            <Play className="w-4 h-4" />
-            Process New Month
-          </button>
+          <div className="flex gap-3">
+            <button
+              onClick={() => setManualModalOpen(true)}
+              className="px-5 py-2.5 rounded-full border border-brand-cyan/40 bg-brand-cyan/5 text-brand-cyan hover:scale-[1.02] active:scale-[0.98] font-bold font-display text-xs transition-all flex items-center justify-center gap-2 cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              Generate Manual Payslip
+            </button>
+            <button
+              onClick={() => setRunModalOpen(true)}
+              className="px-5 py-2.5 rounded-full bg-gradient-to-r from-brand-blue via-brand-violet to-brand-cyan text-brand-bg hover:scale-[1.02] active:scale-[0.98] font-bold font-display text-xs transition-all flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-brand-blue/20"
+            >
+              <Play className="w-4 h-4" />
+              Process New Month
+            </button>
+          </div>
         )}
       </div>
 
@@ -372,6 +421,124 @@ export default function Payroll() {
               </div>
 
               <button type="submit" className="w-full py-3 rounded-full bg-gradient-to-r from-brand-blue via-brand-violet to-brand-cyan text-brand-bg font-bold font-display text-xs cursor-pointer shadow-md shadow-brand-blue/15">Calculate Draft Run</button>
+            </form>
+          </div>
+        </div>
+      )}
+      {/* ---------------- Manual Payslip Generator Modal ---------------- */}
+      {manualModalOpen && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center">
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setManualModalOpen(false)} />
+          <div className="bg-brand-bg-elevated border border-brand-border rounded-2xl p-6 w-full max-w-2xl shadow-glow relative z-50 text-left max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center border-b border-brand-border pb-3 mb-4">
+              <h3 className="text-sm font-extrabold text-white uppercase font-display">Manual Payslip Generator</h3>
+              <button onClick={() => setManualModalOpen(false)} className="p-1 rounded text-brand-text-soft hover:text-white cursor-pointer"><X className="w-4 h-4" /></button>
+            </div>
+            
+            <form onSubmit={manualForm.handleSubmit(handleGenerateManual)} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-bold uppercase text-brand-text-soft mb-1.5">Employee Name</label>
+                  <input type="text" {...manualForm.register('fullName', { required: true })} placeholder="e.g. Muhammad Ali" className="w-full px-3.5 py-2.5 rounded-xl bg-brand-bg border border-brand-border text-xs text-white focus:outline-none" />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold uppercase text-brand-text-soft mb-1.5">Employee Code</label>
+                  <input type="text" {...manualForm.register('employeeCode', { required: true })} placeholder="e.g. BG-0012" className="w-full px-3.5 py-2.5 rounded-xl bg-brand-bg border border-brand-border text-xs text-white focus:outline-none" />
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-bold uppercase text-brand-text-soft mb-1.5">Designation</label>
+                  <input type="text" {...manualForm.register('designation')} placeholder="e.g. SDR Outreach Agent" className="w-full px-3.5 py-2.5 rounded-xl bg-brand-bg border border-brand-border text-xs text-white focus:outline-none" />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold uppercase text-brand-text-soft mb-1.5">Department / Campaign</label>
+                  <input type="text" {...manualForm.register('campaignName')} placeholder="e.g. Cleo HR" className="w-full px-3.5 py-2.5 rounded-xl bg-brand-bg border border-brand-border text-xs text-white focus:outline-none" />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-bold uppercase text-brand-text-soft mb-1.5">Bank Details</label>
+                  <input type="text" {...manualForm.register('bankAccount')} placeholder="e.g. Meezan Bank - 02341234" className="w-full px-3.5 py-2.5 rounded-xl bg-brand-bg border border-brand-border text-xs text-white focus:outline-none" />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase text-brand-text-soft mb-1.5">Month (1-12)</label>
+                    <input type="number" {...manualForm.register('periodMonth', { required: true, min: 1, max: 12 })} className="w-full px-3.5 py-2.5 rounded-xl bg-brand-bg border border-brand-border text-xs text-white focus:outline-none" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase text-brand-text-soft mb-1.5">Year</label>
+                    <input type="number" {...manualForm.register('periodYear', { required: true })} className="w-full px-3.5 py-2.5 rounded-xl bg-brand-bg border border-brand-border text-xs text-white focus:outline-none" />
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-[10px] font-bold uppercase text-brand-text-soft mb-1.5">Base Salary (PKR)</label>
+                  <input type="number" {...manualForm.register('baseSalary', { required: true })} className="w-full px-3.5 py-2.5 rounded-xl bg-brand-bg border border-brand-border text-xs text-white focus:outline-none" />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold uppercase text-brand-text-soft mb-1.5">Attendance Allowance</label>
+                  <input type="number" {...manualForm.register('attendanceAllowance')} className="w-full px-3.5 py-2.5 rounded-xl bg-brand-bg border border-brand-border text-xs text-white focus:outline-none" />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold uppercase text-brand-text-soft mb-1.5">Punctuality Allowance</label>
+                  <input type="number" {...manualForm.register('punctualityAllowance')} className="w-full px-3.5 py-2.5 rounded-xl bg-brand-bg border border-brand-border text-xs text-white focus:outline-none" />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-[10px] font-bold uppercase text-brand-text-soft mb-1.5">Spiff (PKR)</label>
+                  <input type="number" {...manualForm.register('spiff')} className="w-full px-3.5 py-2.5 rounded-xl bg-brand-bg border border-brand-border text-xs text-white focus:outline-none" />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold uppercase text-brand-text-soft mb-1.5">Commission (PKR)</label>
+                  <input type="number" {...manualForm.register('commission')} className="w-full px-3.5 py-2.5 rounded-xl bg-brand-bg border border-brand-border text-xs text-white focus:outline-none" />
+                </div>
+                <div>
+                  <label className="flex items-center gap-2 text-[10px] font-bold uppercase text-brand-text-soft mt-8 select-none cursor-pointer">
+                    <input type="checkbox" {...manualForm.register('isTeamLead')} className="w-4 h-4 rounded border-brand-border text-brand-blue bg-brand-bg focus:ring-0 focus:ring-offset-0 cursor-pointer" />
+                    <span>Is Team Lead?</span>
+                  </label>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-bold uppercase text-brand-text-soft mb-1.5">Bonus (PKR)</label>
+                  <input type="number" {...manualForm.register('bonus')} className="w-full px-3.5 py-2.5 rounded-xl bg-brand-bg border border-brand-border text-xs text-white focus:outline-none" />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold uppercase text-brand-text-soft mb-1.5">Bonus Notes</label>
+                  <input type="text" {...manualForm.register('bonusNotes')} placeholder="e.g. Performance award" className="w-full px-3.5 py-2.5 rounded-xl bg-brand-bg border border-brand-border text-xs text-white focus:outline-none" />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-[10px] font-bold uppercase text-brand-text-soft mb-1.5">Absents & Lates Deduction</label>
+                  <input type="number" {...manualForm.register('absentsLatesDeduction')} className="w-full px-3.5 py-2.5 rounded-xl bg-brand-bg border border-brand-border text-xs text-white focus:outline-none" />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold uppercase text-brand-text-soft mb-1.5">Advance Salary / Loan</label>
+                  <input type="number" {...manualForm.register('loansDeduction')} className="w-full px-3.5 py-2.5 rounded-xl bg-brand-bg border border-brand-border text-xs text-white focus:outline-none" />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold uppercase text-brand-text-soft mb-1.5">Penalty / Other Deductions</label>
+                  <input type="number" {...manualForm.register('otherDeductions')} className="w-full px-3.5 py-2.5 rounded-xl bg-brand-bg border border-brand-border text-xs text-white focus:outline-none" />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold uppercase text-brand-text-soft mb-1.5">Deduction Notes</label>
+                <input type="text" {...manualForm.register('deductionNotes')} placeholder="e.g. Lates penalty details" className="w-full px-3.5 py-2.5 rounded-xl bg-brand-bg border border-brand-border text-xs text-white focus:outline-none" />
+              </div>
+
+              <button type="submit" className="w-full py-3 rounded-full bg-gradient-to-r from-brand-blue via-brand-violet to-brand-cyan text-brand-bg font-bold font-display text-xs cursor-pointer shadow-md shadow-brand-blue/15">Generate & Print PDF</button>
             </form>
           </div>
         </div>

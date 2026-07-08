@@ -79,7 +79,7 @@ exports.getLeaveRequests = async (req, res, next) => {
     if (status) where.status = status;
 
     // RBAC
-    if (req.user.role === 'Employee') {
+    if (['Employee', 'SDR'].includes(req.user.role)) {
       where.employeeId = req.user.employee.id;
     } else if (req.user.role === 'Team Lead') {
       const sdrIds = await getTeamLeadSdrIds(req.user.employee?.id);
@@ -231,7 +231,7 @@ exports.getHalfdayRequests = async (req, res, next) => {
     if (status) where.status = status;
 
     // RBAC
-    if (req.user.role === 'Employee') {
+    if (['Employee', 'SDR'].includes(req.user.role)) {
       where.employeeId = req.user.employee.id;
     } else if (req.user.role === 'Team Lead') {
       const sdrIds = await getTeamLeadSdrIds(req.user.employee?.id);
@@ -376,7 +376,7 @@ exports.getWfhRequests = async (req, res, next) => {
     if (status) where.status = status;
 
     // RBAC
-    if (req.user.role === 'Employee') {
+    if (['Employee', 'SDR'].includes(req.user.role)) {
       where.employeeId = req.user.employee.id;
     } else if (req.user.role === 'Team Lead') {
       const sdrIds = await getTeamLeadSdrIds(req.user.employee?.id);

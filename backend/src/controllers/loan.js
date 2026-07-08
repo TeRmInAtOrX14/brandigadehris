@@ -54,19 +54,9 @@ exports.getLoanRequests = async (req, res, next) => {
     const where = {};
     if (status) where.status = status;
 
-    // RBAC
-    if (req.user.role === 'Employee') {
+    // RBAC: Non-admin roles (Employee, SDR, Team Lead) can only view their own loan requests
+    if (['Employee', 'SDR', 'Team Lead'].includes(req.user.role)) {
       where.employeeId = req.user.employee.id;
-    } else if (req.user.role === 'Team Lead') {
-      const sdrIds = await getTeamLeadSdrIds(req.user.employee?.id);
-      if (employeeId) {
-        if (!sdrIds.includes(employeeId)) {
-          return res.status(403).json({ error: 'Access denied.' });
-        }
-        where.employeeId = employeeId;
-      } else {
-        where.employeeId = { in: sdrIds };
-      }
     } else {
       if (employeeId) where.employeeId = employeeId;
     }

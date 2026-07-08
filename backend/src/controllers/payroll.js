@@ -249,7 +249,23 @@ exports.runPayroll = async (req, res, next) => {
       }
 
       // 8. Final Calculation
-      const earnings = baseSalary + bonusAmount + commission + spiffs;
+      // Attendance Allowance: 2500, cut after one off (totalLeaveDays > 1)
+      const allLeaves = await prisma.leaveRequest.aggregate({
+        _sum: { days: true },
+        where: {
+          employeeId: emp.id,
+          status: 'approved',
+          startDate: { gte: startOfMonth },
+          endDate: { lte: endOfMonth }
+        }
+      });
+      const totalLeaveDays = allLeaves._sum.days || 0;
+      const attendanceAllowance = totalLeaveDays > 1 ? 0 : 2500;
+
+      // Punctuality Allowance: 2500, cut on one late (lateCount >= 1)
+      const punctualityAllowance = lateCount >= 1 ? 0 : 2500;
+
+      const earnings = baseSalary + attendanceAllowance + punctualityAllowance + bonusAmount + commission + spiffs;
       const deductions = unpaidLeaveDeduction + lateDeduction + loansDeduction + otherDeductionsAmount;
       const netPay = Math.max(0, earnings - deductions);
 
@@ -268,6 +284,8 @@ exports.runPayroll = async (req, res, next) => {
           bonus: bonusAmount,
           commission,
           spiffs,
+          attendanceAllowance,
+          punctualityAllowance,
           netPay,
           showups: showupsCount,
           meetingsScheduled: meetingsScheduledCount,
@@ -312,6 +330,7 @@ exports.finalizePayroll = async (req, res, next) => {
           include: {
             employee: {
               include: {
+                user: { select: { role: true } },
                 campaignMembers: {
                   where: { status: 'active' },
                   include: { campaign: true }
@@ -422,8 +441,8 @@ exports.getPayslipsByRun = async (req, res, next) => {
   try {
     const { runId } = req.params;
     
-    // RBAC: Standard Employee should use /my-payslips instead
-    if (req.user.role === 'Employee') {
+    // RBAC: Standard Employee/SDR should use /my-payslips instead
+    if (['Employee', 'SDR'].includes(req.user.role)) {
       return res.status(403).json({ error: 'Access denied.' });
     }
 
@@ -480,6 +499,7 @@ exports.getPayslipPdfFile = async (req, res, next) => {
       include: {
           employee: {
             include: {
+              user: { select: { role: true } },
               campaignMembers: {
                 where: { status: 'active' },
                 include: { campaign: true }
@@ -494,14 +514,62 @@ exports.getPayslipPdfFile = async (req, res, next) => {
       return res.status(404).json({ error: 'Payslip not found' });
     }
 
-    // Role check: Normal Employee can only download their own payslip
-    if (req.user.role === 'Employee' && (!req.user.employee || req.user.employee.id !== payslip.employeeId)) {
+    // Role check: Normal Employee/SDR can only download their own payslip
+    if (['Employee', 'SDR'].includes(req.user.role) && (!req.user.employee || req.user.employee.id !== payslip.employeeId)) {
       return res.status(403).json({ error: 'Forbidden: Access denied' });
     }
 
     // Stream PDF directly to client response
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `inline; filename="payslip-${payslip.id}.pdf"`);
+
+    generatePayslipPdf(res, payslip, { name: 'Brandigade', address: 'Karachi, Pakistan' });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * Generate Manual PDF on the fly
+ */
+exports.generateManualPdf = async (req, res, next) => {
+  try {
+    const body = req.body;
+
+    const payslip = {
+      periodMonth: parseInt(body.periodMonth) || new Date().getMonth() + 1,
+      periodYear: parseInt(body.periodYear) || new Date().getFullYear(),
+      generatedAt: new Date(),
+      baseSalary: parseFloat(body.baseSalary) || 0,
+      spiffs: parseFloat(body.spiff) || 0,
+      commission: parseFloat(body.commission) || 0,
+      bonus: parseFloat(body.bonus) || 0,
+      bonusNotes: body.bonusNotes || '',
+      unpaidLeaveDeduction: parseFloat(body.absentsLatesDeduction) || 0,
+      lateDeduction: 0,
+      loansDeduction: parseFloat(body.loansDeduction) || 0,
+      otherDeductions: parseFloat(body.otherDeductions) || 0,
+      deductionNotes: body.deductionNotes || '',
+      attendanceAllowance: parseFloat(body.attendanceAllowance) || 0,
+      punctualityAllowance: parseFloat(body.punctualityAllowance) || 0,
+      employee: {
+        fullName: body.fullName || 'Anonymous Employee',
+        employeeCode: body.employeeCode || 'BG-0000',
+        designation: body.designation || 'Staff',
+        bankAccount: body.bankAccount || '',
+        campaignMembers: [
+          {
+            role: body.isTeamLead ? 'team_lead' : 'sdr',
+            campaign: {
+              name: body.campaignName || 'Operations'
+            }
+          }
+        ]
+      }
+    };
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="payslip-${body.fullName || 'manual'}.pdf"`);
 
     generatePayslipPdf(res, payslip, { name: 'Brandigade', address: 'Karachi, Pakistan' });
   } catch (err) {
