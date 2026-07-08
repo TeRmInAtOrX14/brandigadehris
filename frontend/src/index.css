@@ -32,6 +32,29 @@
     overflow-x: hidden;
   }
 
+  /* Global input/select focus overrides for consistent premium feel */
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  input[type="number"],
+  input[type="date"],
+  select,
+  textarea {
+    transition: border-color 0.2s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+
+  input[type="text"]:focus,
+  input[type="email"]:focus,
+  input[type="password"]:focus,
+  input[type="number"]:focus,
+  input[type="date"]:focus,
+  select:focus,
+  textarea:focus {
+    border-color: rgba(91, 130, 255, 0.6) !important;
+    box-shadow: 0 0 14px rgba(91, 130, 255, 0.22) !important;
+    outline: none !important;
+  }
+
   /* Custom Scrollbar for sleek premium look */
   ::-webkit-scrollbar {
     width: 6px;
@@ -90,10 +113,123 @@
 }
 
 .card-hover {
-  transition: transform 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
+  transition: transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1), border-color 0.25s ease, box-shadow 0.25s ease;
 }
 .card-hover:hover {
-  transform: translateY(-2px);
+  transform: translateY(-3px);
   border-color: var(--color-brand-border-strong);
-  box-shadow: 0 12px 30px -10px rgba(62, 108, 246, 0.15);
+  box-shadow: 0 20px 40px -15px rgba(62, 108, 246, 0.15);
 }
+
+/* Premium Accent Glow States */
+.hover-glow-blue {
+  transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.hover-glow-blue:hover {
+  border-color: rgba(62, 108, 246, 0.35);
+  box-shadow: 0 12px 30px -10px rgba(62, 108, 246, 0.25), 0 0 0 1px rgba(62, 108, 246, 0.15);
+  background: rgba(62, 108, 246, 0.02);
+  transform: translateY(-3px);
+}
+
+.hover-glow-violet {
+  transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.hover-glow-violet:hover {
+  border-color: rgba(139, 92, 246, 0.35);
+  box-shadow: 0 12px 30px -10px rgba(139, 92, 246, 0.25), 0 0 0 1px rgba(139, 92, 246, 0.15);
+  background: rgba(139, 92, 246, 0.02);
+  transform: translateY(-3px);
+}
+
+.hover-glow-green {
+  transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.hover-glow-green:hover {
+  border-color: rgba(52, 211, 153, 0.35);
+  box-shadow: 0 12px 30px -10px rgba(52, 211, 153, 0.25), 0 0 0 1px rgba(52, 211, 153, 0.15);
+  background: rgba(52, 211, 153, 0.02);
+  transform: translateY(-3px);
+}
+
+.hover-glow-amber {
+  transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.hover-glow-amber:hover {
+  border-color: rgba(245, 185, 66, 0.35);
+  box-shadow: 0 12px 30px -10px rgba(245, 185, 66, 0.25), 0 0 0 1px rgba(245, 185, 66, 0.15);
+  background: rgba(245, 185, 66, 0.02);
+  transform: translateY(-3px);
+}
+
+.hover-glow-cyan {
+  transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.hover-glow-cyan:hover {
+  border-color: rgba(34, 211, 238, 0.35);
+  box-shadow: 0 12px 30px -10px rgba(34, 211, 238, 0.25), 0 0 0 1px rgba(34, 211, 238, 0.15);
+  background: rgba(34, 211, 238, 0.02);
+  transform: translateY(-3px);
+}
+
+.hover-glow-red {
+  transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.hover-glow-red:hover {
+  border-color: rgba(239, 68, 68, 0.35);
+  box-shadow: 0 12px 30px -10px rgba(239, 68, 68, 0.25), 0 0 0 1px rgba(239, 68, 68, 0.15);
+  background: rgba(239, 68, 68, 0.02);
+  transform: translateY(-3px);
+}
+
+/* Micro-animations and premium elements */
+.interactive-btn {
+  transition: all 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.interactive-btn:hover {
+  transform: scale(1.02);
+}
+.interactive-btn:active {
+  transform: scale(0.98);
+}
+
+.input-focus-glow {
+  transition: all 0.2s ease-in-out;
+}
+.input-focus-glow:focus {
+  border-color: var(--color-brand-blue-soft);
+  box-shadow: 0 0 12px rgba(91, 130, 255, 0.25);
+  outline: none;
+}
+
+/* Glow Atmosphere Effects */
+.glow-field {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+}
+.glow-field span {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(150px);
+}
+.glow-field .g1 {
+  width: 50vw;
+  height: 50vw;
+  background: radial-gradient(circle, rgba(62, 108, 246, 0.08) 0%, transparent 80%);
+  top: -20%;
+  left: -10%;
+}
+.glow-field .g2 {
+  width: 60vw;
+  height: 60vw;
+  background: radial-gradient(circle, rgba(139, 92, 246, 0.06) 0%, transparent 80%);
+  bottom: -20%;
+  right: -10%;
+}
+

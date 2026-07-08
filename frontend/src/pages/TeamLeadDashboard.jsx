@@ -51,7 +51,7 @@ export default function TeamLeadDashboard({ stats }) {
       {/* Team Metrics Cards */}
       <motion.div variants={item} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {/* Team Size */}
-        <div className="p-6 rounded-2xl border border-brand-border bg-brand-bg-soft/40 backdrop-blur-md text-left">
+        <div className="p-6 rounded-2xl glass-panel hover-glow-blue text-left">
           <div className="flex items-center justify-between mb-4">
             <span className="text-[10px] font-bold text-brand-text-soft uppercase tracking-widest">Team Size</span>
             <Users className="w-5 h-5 text-brand-blue" />
@@ -60,7 +60,7 @@ export default function TeamLeadDashboard({ stats }) {
         </div>
 
         {/* Present Today */}
-        <div className="p-6 rounded-2xl border border-brand-border bg-brand-bg-soft/40 backdrop-blur-md text-left">
+        <div className="p-6 rounded-2xl glass-panel hover-glow-green text-left">
           <div className="flex items-center justify-between mb-4">
             <span className="text-[10px] font-bold text-brand-text-soft uppercase tracking-widest">Present Today</span>
             <CalendarCheck className="w-5 h-5 text-brand-green" />
@@ -69,7 +69,7 @@ export default function TeamLeadDashboard({ stats }) {
         </div>
 
         {/* Late Today */}
-        <div className="p-6 rounded-2xl border border-brand-border bg-brand-bg-soft/40 backdrop-blur-md text-left">
+        <div className="p-6 rounded-2xl glass-panel hover-glow-red text-left">
           <div className="flex items-center justify-between mb-4">
             <span className="text-[10px] font-bold text-brand-text-soft uppercase tracking-widest">Late Today</span>
             <AlertCircle className="w-5 h-5 text-brand-red" />
@@ -78,7 +78,7 @@ export default function TeamLeadDashboard({ stats }) {
         </div>
 
         {/* Active Campaigns */}
-        <div className="p-6 rounded-2xl border border-brand-border bg-brand-bg-soft/40 backdrop-blur-md text-left">
+        <div className="p-6 rounded-2xl glass-panel hover-glow-cyan text-left">
           <div className="flex items-center justify-between mb-4">
             <span className="text-[10px] font-bold text-brand-text-soft uppercase tracking-widest">Led Campaigns</span>
             <Briefcase className="w-5 h-5 text-brand-cyan" />

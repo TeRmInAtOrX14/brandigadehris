@@ -33,7 +33,7 @@ export default function AdminDashboard({ stats }) {
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {/* Total Headcount */}
-        <div className="p-6 rounded-2xl glass-panel text-left relative overflow-hidden border border-brand-border/40">
+        <div className="p-6 rounded-2xl glass-panel hover-glow-blue text-left relative overflow-hidden border border-brand-border/40">
           <div className="flex items-center justify-between mb-4">
             <span className="text-[10px] font-bold text-brand-text-soft uppercase tracking-widest font-display">Total Headcount</span>
             <Users className="w-5 h-5 text-brand-blue" />
@@ -43,7 +43,7 @@ export default function AdminDashboard({ stats }) {
         </div>
 
         {/* Active Campaigns */}
-        <div className="p-6 rounded-2xl glass-panel text-left relative overflow-hidden border border-brand-border/40">
+        <div className="p-6 rounded-2xl glass-panel hover-glow-violet text-left relative overflow-hidden border border-brand-border/40">
           <div className="flex items-center justify-between mb-4">
             <span className="text-[10px] font-bold text-brand-text-soft uppercase tracking-widest font-display">Active Campaigns</span>
             <Briefcase className="w-5 h-5 text-brand-violet" />
@@ -53,7 +53,7 @@ export default function AdminDashboard({ stats }) {
         </div>
 
         {/* Present Today */}
-        <div className="p-6 rounded-2xl glass-panel text-left relative overflow-hidden border border-brand-border/40">
+        <div className="p-6 rounded-2xl glass-panel hover-glow-green text-left relative overflow-hidden border border-brand-border/40">
           <div className="flex items-center justify-between mb-4">
             <span className="text-[10px] font-bold text-brand-text-soft uppercase tracking-widest font-display">Present Today</span>
             <UserCheck className="w-5 h-5 text-brand-green" />
@@ -63,7 +63,7 @@ export default function AdminDashboard({ stats }) {
         </div>
 
         {/* Lates Today */}
-        <div className="p-6 rounded-2xl glass-panel text-left relative overflow-hidden border border-brand-border/40">
+        <div className="p-6 rounded-2xl glass-panel hover-glow-amber text-left relative overflow-hidden border border-brand-border/40">
           <div className="flex items-center justify-between mb-4">
             <span className="text-[10px] font-bold text-brand-text-soft uppercase tracking-widest font-display">Late Arrivals Today</span>
             <CalendarCheck className="w-5 h-5 text-brand-amber" />
