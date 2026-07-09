@@ -33,8 +33,22 @@ import {
 } from 'recharts';
 import api from '../utils/api';
 import toast from 'react-hot-toast';
+import { useTheme } from '../utils/themeContext';
+
+const MONTH_NAMES = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December'
+];
 
 export default function SDRDashboard() {
+  const { theme, isDark } = useTheme();
+
+  const strokeColor = isDark ? '#6b7287' : '#94a3b8';
+  const gridStroke = isDark ? 'rgba(255,255,255,0.05)' : 'rgba(15, 23, 42, 0.08)';
+  const tooltipBg = isDark ? '#0d101c' : '#ffffff';
+  const tooltipBorder = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(15, 23, 42, 0.08)';
+  const tooltipColor = isDark ? '#f4f6fb' : '#0f172a';
+
   const [employee, setEmployee] = useState(null);
   const [attendance, setAttendance] = useState([]);
   const [campaignDashboard, setCampaignDashboard] = useState(null);
@@ -274,10 +288,10 @@ export default function SDRDashboard() {
             <div className="h-64 w-full">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={weeklyPerformanceData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                  <XAxis dataKey="name" stroke="#6b7287" fontSize={10} tickLine={false} />
-                  <YAxis stroke="#6b7287" fontSize={10} tickLine={false} />
-                  <Tooltip contentStyle={{ backgroundColor: '#0d101c', borderColor: 'rgba(255,255,255,0.08)', borderRadius: 12 }} />
+                  <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} />
+                  <XAxis dataKey="name" stroke={strokeColor} fontSize={10} tickLine={false} />
+                  <YAxis stroke={strokeColor} fontSize={10} tickLine={false} />
+                  <Tooltip contentStyle={{ backgroundColor: tooltipBg, borderColor: tooltipBorder, color: tooltipColor, borderRadius: 12 }} />
                   <Legend verticalAlign="top" height={36} />
                   <Bar dataKey="Booked" fill="#3e6cf6" radius={[4, 4, 0, 0]} name="Meetings Booked" />
                   <Bar dataKey="Show-ups" fill="#34d399" radius={[4, 4, 0, 0]} name="Successful Show-ups" />
@@ -298,10 +312,10 @@ export default function SDRDashboard() {
                       <stop offset="95%" stopColor="#22d3ee" stopOpacity={0}/>
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                  <XAxis dataKey="date" stroke="#6b7287" fontSize={10} tickLine={false} />
-                  <YAxis stroke="#6b7287" fontSize={10} tickLine={false} />
-                  <Tooltip contentStyle={{ backgroundColor: '#0d101c', borderColor: 'rgba(255,255,255,0.08)', borderRadius: 12 }} />
+                  <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} />
+                  <XAxis dataKey="date" stroke={strokeColor} fontSize={10} tickLine={false} />
+                  <YAxis stroke={strokeColor} fontSize={10} tickLine={false} />
+                  <Tooltip contentStyle={{ backgroundColor: tooltipBg, borderColor: tooltipBorder, color: tooltipColor, borderRadius: 12 }} />
                   <Area type="monotone" dataKey="Status" name="Attendance Status %" stroke="#22d3ee" fillOpacity={1} fill="url(#colorStatus)" strokeWidth={2} />
                   <Area type="monotone" dataKey="LateMins" name="Late Arrivals (Mins)" stroke="#f5b942" fillOpacity={0} strokeWidth={2} />
                 </AreaChart>

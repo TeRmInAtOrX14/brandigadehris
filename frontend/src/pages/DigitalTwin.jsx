@@ -39,6 +39,7 @@ import {
 } from 'recharts';
 import api from '../utils/api';
 import toast from 'react-hot-toast';
+import { useTheme } from '../utils/themeContext';
 
 const COLORS = ['#3e6cf6', '#8b5cf6', '#22d3ee', '#34d399', '#f5b942', '#ef4444'];
 const MONTH_NAMES = [
@@ -47,6 +48,14 @@ const MONTH_NAMES = [
 ];
 
 export default function DigitalTwin() {
+  const { isDark } = useTheme();
+  
+  const strokeColor = isDark ? '#6b7287' : '#94a3b8';
+  const gridStroke = isDark ? 'rgba(255,255,255,0.05)' : 'rgba(15, 23, 42, 0.08)';
+  const tooltipBg = isDark ? '#0d101c' : '#ffffff';
+  const tooltipBorder = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(15, 23, 42, 0.08)';
+  const tooltipColor = isDark ? '#f4f6fb' : '#0f172a';
+
   // Live State
   const [employees, setEmployees] = useState([]);
   const [campaigns, setCampaigns] = useState([]);
@@ -663,10 +672,10 @@ export default function DigitalTwin() {
                       <stop offset="95%" stopColor="#f5b942" stopOpacity={0}/>
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                  <XAxis dataKey="date" stroke="#6b7287" fontSize={10} tickLine={false} />
-                  <YAxis stroke="#6b7287" fontSize={10} tickLine={false} />
-                  <Tooltip contentStyle={{ backgroundColor: '#0d101c', borderColor: 'rgba(255,255,255,0.08)', borderRadius: 12 }} />
+                  <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} />
+                  <XAxis dataKey="date" stroke={strokeColor} fontSize={10} tickLine={false} />
+                  <YAxis stroke={strokeColor} fontSize={10} tickLine={false} />
+                  <Tooltip contentStyle={{ backgroundColor: tooltipBg, borderColor: tooltipBorder, color: tooltipColor, borderRadius: 12 }} />
                   <Legend verticalAlign="top" height={36} />
                   <Area type="monotone" dataKey="Rate" name="Attendance Rate %" stroke="#3e6cf6" strokeWidth={2} fillOpacity={1} fill="url(#colorRate)" />
                   <Area type="monotone" dataKey="Lates" name="Late Arrivals Count" stroke="#f5b942" strokeWidth={2} fillOpacity={1} fill="url(#colorLates)" />
@@ -909,7 +918,7 @@ export default function DigitalTwin() {
                       <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                     ))}
                   </Pie>
-                  <Tooltip contentStyle={{ backgroundColor: '#0d101c', borderColor: 'rgba(255,255,255,0.08)', borderRadius: 12 }} />
+                  <Tooltip contentStyle={{ backgroundColor: tooltipBg, borderColor: tooltipBorder, color: tooltipColor, borderRadius: 12 }} />
                 </PieChart>
               </ResponsiveContainer>
             ) : (
@@ -925,10 +934,10 @@ export default function DigitalTwin() {
             {campaignPerformanceData.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={campaignPerformanceData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                  <XAxis dataKey="name" stroke="#6b7287" fontSize={10} tickLine={false} />
-                  <YAxis stroke="#6b7287" fontSize={10} tickLine={false} />
-                  <Tooltip contentStyle={{ backgroundColor: '#0d101c', borderColor: 'rgba(255,255,255,0.08)', borderRadius: 12 }} />
+                  <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} />
+                  <XAxis dataKey="name" stroke={strokeColor} fontSize={10} tickLine={false} />
+                  <YAxis stroke={strokeColor} fontSize={10} tickLine={false} />
+                  <Tooltip contentStyle={{ backgroundColor: tooltipBg, borderColor: tooltipBorder, color: tooltipColor, borderRadius: 12 }} />
                   <Legend verticalAlign="top" height={36} />
                   <Bar dataKey="Live Show-ups" fill="#3e6cf6" radius={[4, 4, 0, 0]} />
                   {simMode && <Bar dataKey="Projected Show-ups" fill="#34d399" radius={[4, 4, 0, 0]} />}

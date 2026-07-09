@@ -18,12 +18,16 @@ import {
   FileText,
   ChevronLeft,
   ChevronRight,
-  Cpu
+  Cpu,
+  Sun,
+  Moon
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../utils/api';
+import { useTheme } from '../utils/themeContext';
 
 export default function DashboardLayout() {
+  const { theme, isDark, toggleTheme } = useTheme();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const [notifications, setNotifications] = useState([]);
@@ -296,6 +300,19 @@ export default function DashboardLayout() {
           </div>
 
           <div className="flex items-center gap-4 relative">
+            {/* Theme Toggle */}
+            <button
+              onClick={toggleTheme}
+              className="p-2.5 rounded-xl border border-brand-border text-brand-text-soft hover:text-white hover:border-brand-border-strong transition-all duration-300 cursor-pointer flex items-center justify-center hover:scale-105 active:scale-95 bg-transparent"
+              aria-label="Toggle Theme"
+            >
+              {isDark ? (
+                <Sun className="w-4 h-4 text-brand-amber animate-pulse" />
+              ) : (
+                <Moon className="w-4 h-4 text-brand-blue" />
+              )}
+            </button>
+
             {/* Notification Bell */}
             <div className="relative">
               <button

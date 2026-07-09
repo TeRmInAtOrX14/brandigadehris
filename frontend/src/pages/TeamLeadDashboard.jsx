@@ -32,10 +32,19 @@ import {
 } from 'recharts';
 import api from '../utils/api';
 import toast from 'react-hot-toast';
+import { useTheme } from '../utils/themeContext';
 
 const COLORS = ['#3e6cf6', '#8b5cf6', '#22d3ee', '#34d399', '#f5b942', '#ef4444'];
 
 export default function TeamLeadDashboard() {
+  const { theme, isDark } = useTheme();
+
+  const strokeColor = isDark ? '#6b7287' : '#94a3b8';
+  const gridStroke = isDark ? 'rgba(255,255,255,0.05)' : 'rgba(15, 23, 42, 0.08)';
+  const tooltipBg = isDark ? '#0d101c' : '#ffffff';
+  const tooltipBorder = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(15, 23, 42, 0.08)';
+  const tooltipColor = isDark ? '#f4f6fb' : '#0f172a';
+
   const [teamMembers, setTeamMembers] = useState([]);
   const [campaigns, setCampaigns] = useState([]);
   const [attendance, setAttendance] = useState([]);
@@ -281,10 +290,10 @@ export default function TeamLeadDashboard() {
               {showupsByMemberData.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={showupsByMemberData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                    <XAxis dataKey="name" stroke="#6b7287" fontSize={10} tickLine={false} />
-                    <YAxis stroke="#6b7287" fontSize={10} tickLine={false} />
-                    <Tooltip contentStyle={{ backgroundColor: '#0d101c', borderColor: 'rgba(255,255,255,0.08)', borderRadius: 12 }} />
+                    <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} />
+                    <XAxis dataKey="name" stroke={strokeColor} fontSize={10} tickLine={false} />
+                    <YAxis stroke={strokeColor} fontSize={10} tickLine={false} />
+                    <Tooltip contentStyle={{ backgroundColor: tooltipBg, borderColor: tooltipBorder, color: tooltipColor, borderRadius: 12 }} />
                     <Legend verticalAlign="top" height={36} />
                     <Bar dataKey="Meetings Booked" fill="#3e6cf6" radius={[4, 4, 0, 0]} />
                     <Bar dataKey="Show-ups" fill="#34d399" radius={[4, 4, 0, 0]} />
@@ -303,10 +312,10 @@ export default function TeamLeadDashboard() {
               {attendanceTrendData.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={attendanceTrendData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                    <XAxis dataKey="date" stroke="#6b7287" fontSize={10} tickLine={false} />
-                    <YAxis stroke="#6b7287" fontSize={10} tickLine={false} />
-                    <Tooltip contentStyle={{ backgroundColor: '#0d101c', borderColor: 'rgba(255,255,255,0.08)', borderRadius: 12 }} />
+                    <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} />
+                    <XAxis dataKey="date" stroke={strokeColor} fontSize={10} tickLine={false} />
+                    <YAxis stroke={strokeColor} fontSize={10} tickLine={false} />
+                    <Tooltip contentStyle={{ backgroundColor: tooltipBg, borderColor: tooltipBorder, color: tooltipColor, borderRadius: 12 }} />
                     <Line type="monotone" dataKey="Rate" name="Attendance Rate %" stroke="#22d3ee" strokeWidth={2.5} dot={{ r: 4 }} activeDot={{ r: 6 }} />
                   </LineChart>
                 </ResponsiveContainer>
@@ -369,7 +378,7 @@ export default function TeamLeadDashboard() {
                         <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                       ))}
                     </Pie>
-                    <Tooltip contentStyle={{ backgroundColor: '#0d101c', borderColor: 'rgba(255,255,255,0.08)', borderRadius: 12 }} />
+                    <Tooltip contentStyle={{ backgroundColor: tooltipBg, borderColor: tooltipBorder, color: tooltipColor, borderRadius: 12 }} />
                   </PieChart>
                 </ResponsiveContainer>
               ) : (

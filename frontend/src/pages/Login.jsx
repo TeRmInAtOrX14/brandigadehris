@@ -2,12 +2,14 @@ import React, { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Lock, Mail, Loader2, ArrowRight } from 'lucide-react';
+import { Lock, Mail, Loader2, ArrowRight, Sun, Moon } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useGoogleLogin } from '@react-oauth/google';
 import api from '../utils/api';
+import { useTheme } from '../utils/themeContext';
 
 export default function Login() {
+  const { theme, isDark, toggleTheme } = useTheme();
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const navigate = useNavigate();
@@ -90,6 +92,21 @@ export default function Login() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-brand-bg px-4 relative overflow-hidden">
+      {/* Theme Toggle in top corner */}
+      <div className="absolute top-6 right-6 z-50">
+        <button
+          onClick={toggleTheme}
+          className="p-2.5 rounded-xl border border-brand-border text-brand-text-soft hover:text-white hover:border-brand-border-strong transition-all duration-300 cursor-pointer flex items-center justify-center hover:scale-105 active:scale-95 bg-brand-bg-elevated/40 backdrop-blur-md"
+          aria-label="Toggle Theme"
+        >
+          {isDark ? (
+            <Sun className="w-4 h-4 text-brand-amber animate-pulse" />
+          ) : (
+            <Moon className="w-4 h-4 text-brand-blue" />
+          )}
+        </button>
+      </div>
+
       {/* Background atmosphere glows */}
       <div className="glow-field">
         <span className="g1" />
