@@ -306,3 +306,145 @@
   right: -10%;
 }
 
+/* ==============================================================================
+   Light Theme Utility Contrast Overrides (SaaS Stripe/Linear Feel)
+   ============================================================================== */
+[data-theme="light"] {
+  /* Prevent static text-white from blending in light background except inside solid primary buttons */
+  .text-white:not(
+    button *, 
+    button, 
+    a.interactive-btn,
+    .brandigade-gradient *, 
+    .bg-brand-blue *, 
+    .bg-brand-violet *, 
+    .bg-brand-green *, 
+    .bg-brand-cyan *, 
+    .bg-brand-red *, 
+    .bg-red-500 *,
+    .bg-green-500 *,
+    .bg-blue-500 *,
+    .bg-violet-500 *,
+    .bg-red-600 *,
+    .bg-green-600 *,
+    .bg-blue-600 *,
+    .bg-violet-600 *,
+    .bg-amber-500 *,
+    .bg-amber-600 *,
+    .bg-brand-blue,
+    .bg-brand-violet,
+    .bg-brand-green,
+    .bg-brand-cyan,
+    .bg-brand-red,
+    .bg-red-500,
+    .bg-green-500,
+    .bg-blue-500,
+    .bg-violet-500,
+    .bg-red-600,
+    .bg-green-600,
+    .bg-blue-600,
+    .bg-violet-600,
+    .bg-amber-500,
+    .bg-amber-600,
+    .badge-primary,
+    .badge-secondary
+  ) {
+    color: var(--brand-text) !important;
+  }
+
+  /* Map hardcoded dark gray/slate texts to theme-friendly colors */
+  .text-slate-100,
+  .text-slate-200,
+  .text-gray-100,
+  .text-gray-200,
+  .text-zinc-100,
+  .text-zinc-200 {
+    color: var(--brand-text) !important;
+  }
+
+  .text-slate-300,
+  .text-gray-300,
+  .text-zinc-300,
+  .text-slate-400,
+  .text-gray-400,
+  .text-zinc-400 {
+    color: var(--brand-text-soft) !important;
+  }
+
+  /* Override hardcoded dark bg colors to light theme equivalents */
+  .bg-slate-900,
+  .bg-gray-900,
+  .bg-zinc-900,
+  .bg-black,
+  .bg-\[\#06070d\],
+  .bg-\[rgba\(62\,108\,246\,0\.02\)\] {
+    background-color: var(--brand-bg) !important;
+  }
+
+  .bg-slate-950,
+  .bg-\[\#0a0c16\],
+  .bg-\[rgba\(62\,108\,246\,0\.05\)\] {
+    background-color: var(--brand-bg-soft) !important;
+  }
+
+  .bg-slate-800,
+  .bg-gray-800,
+  .bg-zinc-800,
+  .bg-\[\#0d101c\],
+  .bg-brand-bg-elevated\/40,
+  .bg-brand-bg-soft\/20,
+  .bg-brand-bg-soft\/40,
+  .bg-brand-bg-soft\/50,
+  .bg-brand-bg-elevated\/20 {
+    background-color: var(--brand-bg-elevated) !important;
+  }
+
+  /* Map border colors to prevent dark border lines on light boxes */
+  .border-slate-800,
+  .border-gray-800,
+  .border-zinc-800,
+  .border-slate-700,
+  .border-gray-700,
+  .border-zinc-700,
+  .border-white\/10,
+  .border-white\/5,
+  .border-white\/8,
+  .border-white\/20,
+  .border-brand-border\/20,
+  .border-brand-border\/30,
+  .border-brand-border\/40,
+  .border-brand-border\/60 {
+    border-color: var(--brand-border) !important;
+  }
+
+  /* Form controls inputs contrast overrides */
+  input,
+  select,
+  textarea {
+    color: var(--brand-text) !important;
+    background-color: var(--brand-bg-soft) !important;
+    border-color: var(--brand-border) !important;
+  }
+  
+  input::placeholder,
+  textarea::placeholder {
+    color: var(--brand-text-mute) !important;
+  }
+
+  /* Hover states for lists and rows */
+  .hover\:bg-brand-bg-elevated\/20:hover,
+  .hover\:bg-brand-bg-soft\/20:hover {
+    background-color: rgba(15, 23, 42, 0.04) !important;
+  }
+  
+  /* Select active lists indicators */
+  .bg-brand-blue\/10 {
+    background-color: rgba(37, 99, 235, 0.08) !important;
+  }
+  
+  /* Text override for matched commission structure items */
+  .text-brand-cyan {
+    color: var(--brand-blue) !important;
+  }
+}
+
