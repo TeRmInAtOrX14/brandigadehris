@@ -87,9 +87,30 @@ exports.getAttendanceSummary = async (req, res, next) => {
       return res.status(400).json({ error: 'employeeId, year, and month are required' });
     }
 
-    // RBAC check
-    if (req.user.role === 'Employee' && req.user.employee?.id !== employeeId) {
+    // RBAC check: standard Employees and SDRs can only see their own attendance summary
+    if (['Employee', 'SDR'].includes(req.user.role) && req.user.employee?.id !== employeeId) {
       return res.status(403).json({ error: 'Access denied.' });
+    }
+
+    // RBAC check: Team Leads can only see their own summary or the summary of employees on their led campaigns
+    if (req.user.role === 'Team Lead' && req.user.employee?.id !== employeeId) {
+      const ledCampaigns = await prisma.campaignMember.findMany({
+        where: { employeeId: req.user.employee?.id, role: 'team_lead', status: 'active' },
+        select: { campaignId: true }
+      });
+      const campaignIds = ledCampaigns.map(c => c.campaignId);
+      
+      const isMemberOfLedCampaign = await prisma.campaignMember.findFirst({
+        where: {
+          employeeId,
+          campaignId: { in: campaignIds },
+          status: 'active'
+        }
+      });
+
+      if (!isMemberOfLedCampaign) {
+        return res.status(403).json({ error: 'Access denied.' });
+      }
     }
 
     const startOfMonth = new Date(Date.UTC(parseInt(year), parseInt(month) - 1, 1));

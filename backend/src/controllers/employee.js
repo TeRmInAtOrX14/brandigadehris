@@ -10,8 +10,24 @@ const prisma = new PrismaClient();
 // ==============================================================================
 exports.getTeams = async (req, res, next) => {
   try {
+    const where = { status: 'active' };
+
+    // Role restriction: Team Leads can only see campaigns they actively lead
+    if (req.user.role === 'Team Lead' && req.user.employee?.id) {
+      where.members = {
+        some: { employeeId: req.user.employee.id, role: 'team_lead', status: 'active' }
+      };
+    }
+
+    // Role restriction: SDRs & standard Employees can only see campaigns they are members of
+    if (['SDR', 'Employee'].includes(req.user.role) && req.user.employee?.id) {
+      where.members = {
+        some: { employeeId: req.user.employee.id, status: 'active' }
+      };
+    }
+
     const campaigns = await prisma.campaign.findMany({
-      where: { status: 'active' },
+      where,
       select: { id: true, name: true }
     });
     res.json(campaigns);

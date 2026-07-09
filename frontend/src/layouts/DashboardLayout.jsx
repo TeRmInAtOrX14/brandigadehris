@@ -79,10 +79,10 @@ export default function DashboardLayout() {
 
   const links = [
     { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard, roles: ['Admin', 'CEO', 'COO', 'Team Lead', 'Employee', 'SDR'] },
-    { label: 'Employees', path: '/dashboard/employees', icon: Users, roles: ['Admin', 'CEO', 'COO', 'Team Lead', 'Employee', 'SDR'] },
+    { label: 'Employees', path: '/dashboard/employees', icon: Users, roles: ['Admin', 'CEO', 'COO', 'Team Lead', 'Employee'] },
     { label: 'Attendance', path: '/dashboard/attendance', icon: CalendarCheck, roles: ['Admin', 'CEO', 'COO', 'Team Lead', 'Employee', 'SDR'] },
     { label: 'Requests', path: '/dashboard/requests', icon: FileSpreadsheet, roles: ['Admin', 'CEO', 'COO', 'Team Lead', 'Employee', 'SDR'] },
-    { label: 'Campaigns', path: '/dashboard/campaigns', icon: Briefcase, roles: ['Admin', 'CEO', 'COO', 'Team Lead', 'Employee', 'SDR'] },
+    { label: 'Campaigns', path: '/dashboard/campaigns', icon: Briefcase, roles: ['Admin', 'CEO', 'COO'] },
     { label: 'Loans & Advances', path: '/dashboard/loans', icon: PiggyBank, roles: ['Admin', 'CEO', 'COO', 'Team Lead', 'Employee', 'SDR'] },
     { label: 'Payroll & Payslips', path: '/dashboard/payroll', icon: FileText, roles: ['Admin', 'CEO', 'COO', 'Team Lead', 'Employee', 'SDR'] },
     { label: 'Digital Twin', path: '/dashboard/digital-twin', icon: Cpu, roles: ['Admin', 'CEO', 'COO'] },
